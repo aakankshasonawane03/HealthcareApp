@@ -1,0 +1,12 @@
+.DS_Store
+Client/node_modules/
+Client/.expo/
+Client/.env
+Client/.env.*
+!Client/.env.example
+server/.env
+server/.env.*
+!server/.env.example
+server/tmp/
+server/server.exe
+server/firebase-service-account.json

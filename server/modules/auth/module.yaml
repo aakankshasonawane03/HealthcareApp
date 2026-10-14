@@ -1,0 +1,25 @@
+name: auth
+version: 1.0.0
+type: module
+
+backend: true
+frontend: false
+
+entry:
+  backend: module.go
+  frontend: index.ts
+
+dependencies: []
+
+routes:
+  - /auth
+
+events:
+  publish: []
+  subscribe: []
+
+permissions:
+  - public
+
+config:
+  env: []
