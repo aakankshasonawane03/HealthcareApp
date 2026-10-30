@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"fmt"
 
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/auth/model"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/auth/repository"
@@ -446,14 +447,10 @@ func generateJWT(
 	user *model.User,
 ) (string, error) {
 
-	secret := os.Getenv(
-		"JWT_SECRET",
-	)
-
-	if secret == "" {
-
-		secret = "sharkweb-secret-key"
-	}
+	secret := os.Getenv("JWT_SECRET")
+if secret == "" {
+    return "", fmt.Errorf("JWT_SECRET is not configured")
+}
 
 	now := time.Now()
 

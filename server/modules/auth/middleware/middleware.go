@@ -33,8 +33,8 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		jwtSecret := os.Getenv("JWT_SECRET")
-		if jwtSecret == "" {
+	jwtSecret := strings.TrimSpace(os.Getenv("JWT_SECRET"))		
+	if jwtSecret == "" {
 			c.AbortWithStatusJSON(
 				http.StatusInternalServerError,
 				gin.H{

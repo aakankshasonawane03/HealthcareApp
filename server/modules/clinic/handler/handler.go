@@ -1,249 +1,269 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
+	"strings"
+
+	model "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/model"
+	clinicService "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/service"
+	orgService "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/organization/service"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-
-	model "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/model"
-	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/service"
 )
 
 type ClinicController struct {
-	service service.ClinicService
+	service    clinicService.ClinicService
+	orgService orgService.OrganizationService
 }
 
 func NewClinicController(
-	service service.ClinicService,
+	service clinicService.ClinicService,
+	orgService orgService.OrganizationService,
 ) *ClinicController {
-
 	return &ClinicController{
-		service: service,
+		service:    service,
+		orgService: orgService,
 	}
 }
 
-// Create Clinic
-func (c *ClinicController) CreateClinic(ctx *gin.Context) {
+// getAuthenticatedOrganizationID retrieves the authenticated user's organization.
+// The organization ID is derived from the authenticated account, not request data.
+func (h *ClinicController) getAuthenticatedOrganizationID(
+	c *gin.Context,
+) (primitive.ObjectID, bool) {
+	userID := strings.TrimSpace(c.GetString("user_id"))
+
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Authenticated user ID is missing",
+		})
+		return primitive.NilObjectID, false
+	}
+
+	userObjectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Invalid authenticated user ID",
+		})
+		return primitive.NilObjectID, false
+	}
+
+	org, err := h.orgService.GetMyOrganization(
+		c.Request.Context(),
+		userObjectID,
+	)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "No organization is associated with this account",
+			})
+			return primitive.NilObjectID, false
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to retrieve organization",
+		})
+		return primitive.NilObjectID, false
+	}
+
+	if org == nil || org.ID.IsZero() {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "No valid organization is associated with this account",
+		})
+		return primitive.NilObjectID, false
+	}
+
+	return org.ID, true
+}
+
+// CreateClinic creates a clinic for the authenticated user's organization.
+func (h *ClinicController) CreateClinic(c *gin.Context) {
+	organizationID, ok := h.getAuthenticatedOrganizationID(c)
+	if !ok {
+		return
+	}
 
 	var clinic model.Clinic
-
-	if err := ctx.ShouldBindJSON(&clinic); err != nil {
-
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
+	if err := c.ShouldBindJSON(&clinic); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid clinic request body",
 		})
-
 		return
 	}
 
-	err := c.service.CreateClinic(
-		ctx.Request.Context(),
+	// Always use the authenticated user's organization.
+	clinic.OrganizationID = organizationID
+
+	err := h.service.CreateClinic(
+		c.Request.Context(),
+		organizationID,
 		&clinic,
 	)
-
 	if err != nil {
-
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-
-			"message": err.Error(),
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
 		})
-
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, gin.H{
-		"success": true,
+	c.JSON(http.StatusCreated, gin.H{
 		"message": "Clinic created successfully",
 		"data":    clinic,
 	})
 }
 
-// Get All Clinics
-func (c *ClinicController) GetAllClinics(ctx *gin.Context) {
-
-	clinics, err := c.service.GetAllClinics(
-		ctx.Request.Context(),
-	)
-
-	if err != nil {
-
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to fetch clinics",
-			"error":   err.Error(),
-		})
-
+// GetAllClinics lists clinics belonging to the authenticated organization.
+func (h *ClinicController) GetAllClinics(c *gin.Context) {
+	organizationID, ok := h.getAuthenticatedOrganizationID(c)
+	if !ok {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"count":   len(clinics),
-		"data":    clinics,
+	clinics, err := h.service.GetAllClinics(
+		c.Request.Context(),
+		organizationID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to retrieve clinics",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"count": len(clinics),
+		"data":  clinics,
 	})
 }
 
-// Get Clinic By ID
-func (c *ClinicController) GetClinicByID(ctx *gin.Context) {
-
-	id := ctx.Param("id")
-
-	objectID, err := primitive.ObjectIDFromHex(id)
-
-	if err != nil {
-
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid clinic ID",
-		})
-
+// GetClinicByID retrieves a clinic within the authenticated organization.
+func (h *ClinicController) GetClinicByID(c *gin.Context) {
+	organizationID, ok := h.getAuthenticatedOrganizationID(c)
+	if !ok {
 		return
 	}
 
-	clinic, err := c.service.GetClinicByID(
-		ctx.Request.Context(),
-		objectID,
-	)
-
+	clinicID, err := primitive.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid clinic ID",
+		})
+		return
+	}
 
-		if err == mongo.ErrNoDocuments {
-
-			ctx.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": "Clinic not found",
+	clinic, err := h.service.GetClinicByID(
+		c.Request.Context(),
+		organizationID,
+		clinicID,
+	)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "Clinic not found",
 			})
-
 			return
 		}
 
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to fetch clinic",
-			"error":   err.Error(),
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to retrieve clinic",
 		})
-
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    clinic,
+	c.JSON(http.StatusOK, gin.H{
+		"data": clinic,
 	})
 }
 
-// Update Clinic
-func (c *ClinicController) UpdateClinic(ctx *gin.Context) {
+// UpdateClinic updates a clinic within the authenticated organization.
+func (h *ClinicController) UpdateClinic(c *gin.Context) {
+	organizationID, ok := h.getAuthenticatedOrganizationID(c)
+	if !ok {
+		return
+	}
 
-	id := ctx.Param("id")
-
-	objectID, err := primitive.ObjectIDFromHex(id)
-
+	clinicID, err := primitive.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
-
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid clinic ID",
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid clinic ID",
 		})
-
 		return
 	}
 
 	var clinic model.Clinic
-
-	if err := ctx.ShouldBindJSON(&clinic); err != nil {
-
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
+	if err := c.ShouldBindJSON(&clinic); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid clinic request body",
 		})
-
 		return
 	}
 
-	err = c.service.UpdateClinic(
-		ctx.Request.Context(),
-		objectID,
+	// Prevent the request from changing the clinic's organization.
+	clinic.OrganizationID = organizationID
+
+	err = h.service.UpdateClinic(
+		c.Request.Context(),
+		organizationID,
+		clinicID,
 		&clinic,
 	)
-
 	if err != nil {
-
-		if err == mongo.ErrNoDocuments {
-
-			ctx.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": "Clinic not found",
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "Clinic not found in your organization",
 			})
-
 			return
 		}
 
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": err.Error(),
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
 		})
-
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"success": true,
+	c.JSON(http.StatusOK, gin.H{
 		"message": "Clinic updated successfully",
 	})
 }
 
-// Delete Clinic
-func (c *ClinicController) DeleteClinic(ctx *gin.Context) {
-
-	id := ctx.Param("id")
-
-	objectID, err := primitive.ObjectIDFromHex(id)
-
-	if err != nil {
-
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid clinic ID",
-		})
-
+// DeleteClinic deletes a clinic within the authenticated organization.
+func (h *ClinicController) DeleteClinic(c *gin.Context) {
+	organizationID, ok := h.getAuthenticatedOrganizationID(c)
+	if !ok {
 		return
 	}
 
-	err = c.service.DeleteClinic(
-		ctx.Request.Context(),
-		objectID,
-	)
-
+	clinicID, err := primitive.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid clinic ID",
+		})
+		return
+	}
 
-		if err == mongo.ErrNoDocuments {
-
-			ctx.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": "Clinic not found",
+	err = h.service.DeleteClinic(
+		c.Request.Context(),
+		organizationID,
+		clinicID,
+	)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "Clinic not found in your organization",
 			})
-
 			return
 		}
 
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to delete clinic",
-			"error":   err.Error(),
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to delete clinic",
 		})
-
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"success": true,
+	c.JSON(http.StatusOK, gin.H{
 		"message": "Clinic deleted successfully",
 	})
 }

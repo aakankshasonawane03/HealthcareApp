@@ -10,6 +10,7 @@ import (
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/doctor"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/medicalrecord"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/notification"
+	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/organization"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/patients"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/prescription"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/queue"
@@ -19,6 +20,7 @@ import (
 func LoadModules() []module.Module {
 	return []module.Module{
 		notification.NewModule(),
+		organization.NewModule(),
 		appointment.NewModule(),
 		admin.NewModule(),
 		auth.NewModule(),

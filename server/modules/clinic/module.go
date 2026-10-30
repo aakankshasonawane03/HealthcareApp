@@ -1,11 +1,13 @@
 package clinic
 
 import (
+	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/auth/middleware"	
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/core/module"
 	clinicHandler "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/handler"
 	clinicRepository "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/repository"
 	clinicService "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/service"
-	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/core/middleware"
+	organizationRepository "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/organization/repository"
+	organizationService "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/organization/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,11 +26,16 @@ func (m *Module) Name() string {
 }
 
 func (m *Module) Init(ctx *module.ModuleContext) error {
-	collection := ctx.DB.Collection("clinics")
+	clinicCollection := ctx.DB.Collection("clinics")
+	organizationCollection := ctx.DB.Collection("organizations")
 
-	repo := clinicRepository.NewClinicRepository(collection)
-	service := clinicService.NewClinicService(repo)
-	m.handler = clinicHandler.NewClinicController(service)
+	clinicRepo := clinicRepository.NewClinicRepository(clinicCollection)
+	clinicSvc := clinicService.NewClinicService(clinicRepo)
+
+	orgRepo := organizationRepository.NewOrganizationRepository(organizationCollection)
+	orgSvc := organizationService.NewOrganizationService(orgRepo)
+
+	m.handler = clinicHandler.NewClinicController(clinicSvc, orgSvc)
 
 	return nil
 }
@@ -46,6 +53,7 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 			"module": ModuleName,
 		})
 	})
+
 	protected := r.Group("/clinics")
 	protected.Use(middleware.AuthMiddleware())
 
@@ -56,5 +64,4 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 	protected.DELETE("/delete/:id", m.handler.DeleteClinic)
 }
 
-// compile-time safety
 var _ module.Module = (*Module)(nil)

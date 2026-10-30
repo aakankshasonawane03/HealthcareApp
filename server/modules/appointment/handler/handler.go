@@ -18,9 +18,6 @@ func NewAppointmentHandler(service service.AppointmentService) *AppointmentHandl
 	}
 }
 
-
-
-
 // Create Appointment
 func (h *AppointmentHandler) CreateAppointment(c *gin.Context) {
 
@@ -46,6 +43,7 @@ func (h *AppointmentHandler) CreateAppointment(c *gin.Context) {
 		})
 		return
 	}
+	
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,

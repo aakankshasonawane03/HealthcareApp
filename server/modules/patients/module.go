@@ -1,13 +1,14 @@
 package patients
 
 import (
+	"github.com/gin-gonic/gin"
+
+	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/core/authorization"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/core/module"
-	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/core/middleware"
+	authMiddleware "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/auth/middleware"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/patients/handler"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/patients/repository"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/patients/service"
-
-	"github.com/gin-gonic/gin"
 )
 
 const ModuleName = "patients"
@@ -25,27 +26,24 @@ func (m *Module) Name() string {
 }
 
 func (m *Module) Init(ctx *module.ModuleContext) error {
+	// MongoDB collection
+	patientCollection := ctx.DB.Collection("patients")
 
-	collection := ctx.DB.Collection("patients")
-
-	repo := repository.NewPatientRepository(collection)
-
+	// Initialize repository and service
+	repo := repository.NewPatientRepository(patientCollection)
 	patientService := service.NewPatientService(repo)
 
+	// Initialize handler
 	m.handler = handler.NewPatientHandler(patientService)
 
 	return nil
 }
 
 func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
-
-	// =========================
-	// PUBLIC ROUTES
-	// =========================
-
+	// Public health routes
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
-			"message": ModuleName + " module working 🚀",
+			"message": ModuleName + " module working",
 		})
 	})
 
@@ -56,40 +54,51 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 		})
 	})
 
-	// =========================
-	// PROTECTED ROUTES
-	// =========================
-
+	// Authentication middleware
 	protected := r.Group("")
-	protected.Use(middleware.AuthMiddleware())
+	protected.Use(authMiddleware.AuthMiddleware())
 
-	{
-		protected.POST(
-			"/createpatient",
-			m.handler.CreatePatient,
-		)
+	// Only administrators can create patient records
+	protected.POST(
+		"/createpatient",
+		authorization.RequireRoles("ADMIN"),
+		m.handler.CreatePatient,
+	)
 
-		protected.GET(
-			"/listpatients",
-			m.handler.GetAllPatients,
-		)
+	// Only administrators can list all patient records
+	protected.GET(
+		"/listpatients",
+		authorization.RequireRoles("ADMIN"),
+		m.handler.GetAllPatients,
+	)
 
-		protected.GET(
-			"/viewpatient/:id",
-			m.handler.GetPatientByID,
-		)
+	// Administrators and doctors can view patient records.
+	// Ensure ownership/clinic access is checked in the service or handler.
+	protected.GET(
+		"/viewpatient/:id",
+		authorization.RequireRoles("ADMIN", "DOCTOR"),
+		m.handler.GetPatientByID,
+	)
 
-		protected.PUT(
-			"/updatepatient/:id",
-			m.handler.UpdatePatient,
-		)
+	// Only administrators can update or delete patient records
+	protected.PUT(
+		"/updatepatient/:id",
+		authorization.RequireRoles("ADMIN"),
+		m.handler.UpdatePatient,
+	)
 
-		protected.DELETE(
-			"/deletepatient/:id",
-			m.handler.DeletePatient,
-		)
-	}
+	protected.DELETE(
+		"/deletepatient/:id",
+		authorization.RequireRoles("ADMIN"),
+		m.handler.DeletePatient,
+	)
+
+	// Patients can view their own linked profile
+	protected.GET(
+		"/me",
+		authorization.RequireRoles("PATIENT"),
+		m.handler.GetMyPatient,
+	)
 }
 
-// Compile-time safety
 var _ module.Module = (*Module)(nil)

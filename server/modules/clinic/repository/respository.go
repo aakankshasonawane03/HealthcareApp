@@ -11,10 +11,10 @@ import (
 
 type ClinicRepository interface {
 	Create(ctx context.Context, clinic *model.Clinic) error
-	GetAll(ctx context.Context) ([]model.Clinic, error)
-	GetByID(ctx context.Context, id primitive.ObjectID) (*model.Clinic, error)
-	Update(ctx context.Context, id primitive.ObjectID, clinic *model.Clinic) error
-	Delete(ctx context.Context, id primitive.ObjectID) error
+	GetAll(ctx context.Context, organizationID primitive.ObjectID) ([]model.Clinic, error)
+	GetByID(ctx context.Context, organizationID, id primitive.ObjectID) (*model.Clinic, error)
+	Update(ctx context.Context, organizationID, id primitive.ObjectID, clinic *model.Clinic) error
+	Delete(ctx context.Context, organizationID, id primitive.ObjectID) error
 }
 
 type clinicRepository struct {
@@ -27,35 +27,27 @@ func NewClinicRepository(collection *mongo.Collection) ClinicRepository {
 	}
 }
 
-// Create
 func (r *clinicRepository) Create(
 	ctx context.Context,
 	clinic *model.Clinic,
 ) error {
-
 	_, err := r.collection.InsertOne(ctx, clinic)
-
 	return err
 }
 
-// Get All
 func (r *clinicRepository) GetAll(
 	ctx context.Context,
+	organizationID primitive.ObjectID,
 ) ([]model.Clinic, error) {
-
-	cursor, err := r.collection.Find(
-		ctx,
-		bson.M{},
-	)
-
+	cursor, err := r.collection.Find(ctx, bson.M{
+		"organization_id": organizationID,
+	})
 	if err != nil {
 		return nil, err
 	}
-
 	defer cursor.Close(ctx)
 
 	var clinics []model.Clinic
-
 	if err := cursor.All(ctx, &clinics); err != nil {
 		return nil, err
 	}
@@ -67,21 +59,16 @@ func (r *clinicRepository) GetAll(
 	return clinics, nil
 }
 
-// Get By ID
 func (r *clinicRepository) GetByID(
 	ctx context.Context,
-	id primitive.ObjectID,
+	organizationID, id primitive.ObjectID,
 ) (*model.Clinic, error) {
-
 	var clinic model.Clinic
 
-	err := r.collection.FindOne(
-		ctx,
-		bson.M{
-			"_id": id,
-		},
-	).Decode(&clinic)
-
+	err := r.collection.FindOne(ctx, bson.M{
+		"_id":             id,
+		"organization_id": organizationID,
+	}).Decode(&clinic)
 	if err != nil {
 		return nil, err
 	}
@@ -89,13 +76,11 @@ func (r *clinicRepository) GetByID(
 	return &clinic, nil
 }
 
-// Update
 func (r *clinicRepository) Update(
 	ctx context.Context,
-	id primitive.ObjectID,
+	organizationID, id primitive.ObjectID,
 	clinic *model.Clinic,
 ) error {
-
 	update := bson.M{
 		"$set": bson.M{
 			"name":         clinic.Name,
@@ -116,11 +101,11 @@ func (r *clinicRepository) Update(
 	result, err := r.collection.UpdateOne(
 		ctx,
 		bson.M{
-			"_id": id,
+			"_id":             id,
+			"organization_id": organizationID,
 		},
 		update,
 	)
-
 	if err != nil {
 		return err
 	}
@@ -132,19 +117,14 @@ func (r *clinicRepository) Update(
 	return nil
 }
 
-// Delete
 func (r *clinicRepository) Delete(
 	ctx context.Context,
-	id primitive.ObjectID,
+	organizationID, id primitive.ObjectID,
 ) error {
-
-	result, err := r.collection.DeleteOne(
-		ctx,
-		bson.M{
-			"_id": id,
-		},
-	)
-
+	result, err := r.collection.DeleteOne(ctx, bson.M{
+		"_id":             id,
+		"organization_id": organizationID,
+	})
 	if err != nil {
 		return err
 	}

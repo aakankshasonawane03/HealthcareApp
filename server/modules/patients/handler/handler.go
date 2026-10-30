@@ -141,3 +141,32 @@ func (h *PatientHandler) DeletePatient(c *gin.Context) {
 		"message": "Patient deleted successfully",
 	})
 }
+// Get the current logged-in patient's own profile.
+func (h *PatientHandler) GetMyPatient(c *gin.Context) {
+    userID := c.GetString("user_id")
+
+    if userID == "" {
+        c.JSON(http.StatusUnauthorized, gin.H{
+            "success": false,
+            "message": "Authenticated user ID is missing",
+        })
+        return
+    }
+
+    patient, err := h.service.GetMyPatient(
+        c.Request.Context(),
+        userID,
+    )
+    if err != nil {
+        c.JSON(http.StatusNotFound, gin.H{
+            "success": false,
+            "message": err.Error(),
+        })
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "success": true,
+        "data":    patient,
+    })
+}

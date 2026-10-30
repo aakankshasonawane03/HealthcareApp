@@ -47,7 +47,7 @@ func (m *Module) Init(ctx *module.ModuleContext) error {
 }
 
 func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
-	admin := r.Group("/admin")
+	admin := r.Group("")
 
 	admin.Use(authMiddleware.AuthMiddleware())
 	admin.Use(adminMiddleware.AdminMiddleware())

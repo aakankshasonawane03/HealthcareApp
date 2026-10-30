@@ -1,9 +1,11 @@
+
 package middleware
 
 import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -11,94 +13,83 @@ import (
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
-		// 1. Get Authorization header
 		authHeader := c.GetHeader("Authorization")
-
 		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"success": false,
-				"message": "Authorization header is required",
+				"message": "Authorization token is required",
 			})
-			c.Abort()
 			return
 		}
 
-		// 2. Check Bearer format
 		parts := strings.SplitN(authHeader, " ", 2)
-
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			c.JSON(http.StatusUnauthorized, gin.H{
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || strings.TrimSpace(parts[1]) == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"success": false,
-				"message": "Invalid Authorization header format",
+				"message": "Invalid Authorization header",
 			})
-			c.Abort()
 			return
 		}
 
-		tokenString := strings.TrimSpace(parts[1])
-
-		if tokenString == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
+		secret := strings.TrimSpace(os.Getenv("JWT_SECRET"))
+		if secret == "" {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"message": "Token is required",
+				"message": "JWT_SECRET is not configured",
 			})
-			c.Abort()
 			return
 		}
 
-		// 3. Read public key
-		publicKeyPath := "core/certs/public.pem"
+		token, err := jwt.Parse(parts[1], func(token *jwt.Token) (interface{}, error) {
+			if token.Method != jwt.SigningMethodHS256 {
+				return nil, jwt.ErrSignatureInvalid
+			}
+			return []byte(secret), nil
+		}, jwt.WithValidMethods([]string{"HS256"}))
 
-		publicKey, err := os.ReadFile(publicKeyPath)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to read public key",
-			})
-			c.Abort()
-			return
-		}
-
-		// 4. Parse RSA public key
-		rsaPublicKey, err := jwt.ParseRSAPublicKeyFromPEM(publicKey)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to parse public key",
-			})
-			c.Abort()
-			return
-		}
-
-		// 5. Parse and verify JWT
-		token, err := jwt.Parse(
-			tokenString,
-			func(token *jwt.Token) (interface{}, error) {
-
-				// Make sure token uses RSA
-				if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-					return nil, jwt.ErrSignatureInvalid
-				}
-
-				return rsaPublicKey, nil
-			},
-		)
-
-		// 6. Check token
-		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{
+		if err != nil || token == nil || !token.Valid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"message": "Invalid or expired token",
 			})
-			c.Abort()
 			return
 		}
 
-		// 7. Store validated token
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "Invalid token claims",
+			})
+			return
+		}
+
+		userID, _ := claims["user_id"].(string)
+		role, _ := claims["role"].(string)
+		email, _ := claims["email"].(string)
+
+		if userID == "" || role == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "Token is missing user ID or role",
+			})
+			return
+		}
+
+		exp, ok := claims["exp"].(float64)
+		if !ok || time.Now().Unix() >= int64(exp) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "Token has expired",
+			})
+			return
+		}
+
+		c.Set("user_id", userID)
+		c.Set("role", strings.ToUpper(role))
+		c.Set("email", email)
 		c.Set("user", token)
 
-		// 8. Continue
 		c.Next()
 	}
 }
