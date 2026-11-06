@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	model "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/model"
 	"go.mongodb.org/mongo-driver/bson"
@@ -31,6 +32,14 @@ func (r *clinicRepository) Create(
 	ctx context.Context,
 	clinic *model.Clinic,
 ) error {
+	if clinic == nil {
+		return mongo.ErrNilDocument
+	}
+
+	if clinic.OrganizationID.IsZero() {
+		return errors.New("organization ID is required")
+	}
+
 	_, err := r.collection.InsertOne(ctx, clinic)
 	return err
 }

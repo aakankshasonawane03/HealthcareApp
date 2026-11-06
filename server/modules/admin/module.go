@@ -7,8 +7,11 @@ import (
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/admin/handler"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/admin/repository"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/admin/service"
-	authMiddleware "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/auth/middleware"
+
 	adminMiddleware "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/admin/middleware"
+	authMiddleware "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/auth/middleware"
+	authrepository "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/auth/repository"
+	authservice "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/auth/service"
 )
 
 const ModuleName = "admin"
@@ -26,12 +29,16 @@ func (m *Module) Name() string {
 }
 
 func (m *Module) Init(ctx *module.ModuleContext) error {
+
+	// MongoDB collections
 	usersCollection := ctx.DB.Collection("users")
 	doctorsCollection := ctx.DB.Collection("doctors")
 	patientsCollection := ctx.DB.Collection("patients")
 	clinicsCollection := ctx.DB.Collection("clinics")
 	appointmentsCollection := ctx.DB.Collection("appointments")
+	refreshTokenCollection := ctx.DB.Collection("refresh_tokens")
 
+	// Initialize Admin repository
 	adminRepository := repository.NewAdminRepository(
 		usersCollection,
 		doctorsCollection,
@@ -40,15 +47,32 @@ func (m *Module) Init(ctx *module.ModuleContext) error {
 		appointmentsCollection,
 	)
 
-	adminService := service.NewAdminService(adminRepository)
+	// Initialize Auth repository
+	authRepo := authrepository.NewUserRepository(
+		usersCollection,
+		refreshTokenCollection,
+	)
+
+	// Initialize Auth service
+	authSvc := authservice.NewAuthService(authRepo)
+
+	// Initialize Admin service
+	adminService := service.NewAdminService(
+		adminRepository,
+		authSvc,
+	)
+
+	// Initialize Admin handler
 	m.handler = handler.NewAdminHandler(adminService)
 
 	return nil
 }
 
 func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
+
 	admin := r.Group("")
 
+	// All Admin APIs require authentication and ADMIN role.
 	admin.Use(authMiddleware.AuthMiddleware())
 	admin.Use(adminMiddleware.AdminMiddleware())
 
@@ -62,6 +86,7 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 
 	admin.GET("/clinics", m.handler.GetClinics)
 	admin.POST("/clinics", m.handler.CreateClinic)
+	admin.POST("/users/organization-owner", m.handler.CreateOrganizationOwner)
 	admin.PUT("/clinics/:id", m.handler.UpdateClinic)
 	admin.DELETE("/clinics/:id", m.handler.DeleteClinic)
 

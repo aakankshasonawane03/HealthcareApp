@@ -5,71 +5,64 @@ import (
 	"errors"
 	"time"
 
-	appointmentDTO "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/appointment/dto"
-	appointmentModel "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/appointment/model"
+	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/appointment/dto"
+	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/appointment/model"
 	appointmentRepository "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/appointment/repository"
-
 	doctorRepository "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/doctor/repository"
+	notificationService "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/notification/service"
 	patientRepository "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/patients/repository"
 
-	notificationService "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/notification/service"
-
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// ============================================================
-// APPOINTMENT SERVICE INTERFACE
-// ============================================================
-
 type AppointmentService interface {
-
-	// Create
 	CreateAppointment(
 		ctx context.Context,
-		req appointmentDTO.CreateAppointmentRequest,
-	) (*appointmentModel.Appointment, error)
+		organizationID primitive.ObjectID,
+		req dto.CreateAppointmentRequest,
+	) (*model.Appointment, error)
 
-	// Get all
 	GetAllAppointments(
 		ctx context.Context,
-	) ([]appointmentModel.Appointment, error)
+		organizationID primitive.ObjectID,
+	) ([]model.Appointment, error)
 
-	// Get by ID
 	GetAppointmentByID(
 		ctx context.Context,
+		organizationID primitive.ObjectID,
 		id string,
-	) (*appointmentModel.Appointment, error)
+	) (*model.Appointment, error)
 
-	// Get appointments for reminder
+	UpdateAppointment(
+		ctx context.Context,
+		organizationID primitive.ObjectID,
+		id string,
+		req dto.UpdateAppointmentRequest,
+	) (*model.Appointment, error)
+
+	DeleteAppointment(
+		ctx context.Context,
+		organizationID primitive.ObjectID,
+		id string,
+	) error
+
 	GetUpcomingAppointments(
 		ctx context.Context,
 		startTime time.Time,
 		endTime time.Time,
-	) ([]appointmentModel.Appointment, error)
+	) ([]model.Appointment, error)
 
-	// Update
-	UpdateAppointment(
+	SendAppointmentReminder(
 		ctx context.Context,
-		id string,
-		req appointmentDTO.UpdateAppointmentRequest,
-	) (*appointmentModel.Appointment, error)
-
-	// Delete
-	DeleteAppointment(
-		ctx context.Context,
-		id string,
+		appointment model.Appointment,
 	) error
 
-	// Mark reminder as sent
 	MarkReminderSent(
 		ctx context.Context,
-		id string,
+		id primitive.ObjectID,
 	) error
 }
-
-// ============================================================
-// SERVICE STRUCT
-// ============================================================
 
 type appointmentService struct {
 	appointmentRepo appointmentRepository.AppointmentRepository
@@ -78,17 +71,12 @@ type appointmentService struct {
 	notificationSvc *notificationService.Service
 }
 
-// ============================================================
-// CONSTRUCTOR
-// ============================================================
-
 func NewAppointmentService(
 	appointmentRepo appointmentRepository.AppointmentRepository,
 	doctorRepo doctorRepository.DoctorRepository,
 	patientRepo patientRepository.PatientRepository,
 	notificationSvc *notificationService.Service,
 ) AppointmentService {
-
 	return &appointmentService{
 		appointmentRepo: appointmentRepo,
 		doctorRepo:      doctorRepo,
@@ -97,510 +85,314 @@ func NewAppointmentService(
 	}
 }
 
-// ============================================================
 // CREATE APPOINTMENT
-// ============================================================
 
 func (s *appointmentService) CreateAppointment(
 	ctx context.Context,
-	req appointmentDTO.CreateAppointmentRequest,
-) (*appointmentModel.Appointment, error) {
+	organizationID primitive.ObjectID,
+	req dto.CreateAppointmentRequest,
+) (*model.Appointment, error) {
 
-	// --------------------------------------------------------
-	// Validate Doctor ID
-	// --------------------------------------------------------
+	if organizationID.IsZero() {
+		return nil, errors.New("organization ID is required")
+	}
 
 	doctorID, err := primitive.ObjectIDFromHex(req.DoctorID)
-
 	if err != nil {
-		return nil, errors.New("invalid doctor id")
+		return nil, errors.New("invalid doctor ID")
 	}
-
-	// --------------------------------------------------------
-	// Validate Patient ID
-	// --------------------------------------------------------
 
 	patientID, err := primitive.ObjectIDFromHex(req.PatientID)
-
 	if err != nil {
-		return nil, errors.New("invalid patient id")
+		return nil, errors.New("invalid patient ID")
 	}
 
-	// --------------------------------------------------------
-	// Check Doctor Exists
-	// --------------------------------------------------------
+	if req.AppointmentDate.IsZero() {
+		return nil, errors.New("appointment date is required")
+	}
 
-	_, err = s.doctorRepo.GetByID(
+	if req.AppointmentTime == "" {
+		return nil, errors.New("appointment time is required")
+	}
+
+	// Verify doctor belongs to this organization.
+	_, err = s.doctorRepo.GetByID(ctx, organizationID, req.DoctorID)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errors.New("doctor not found in this organization")
+		}
+		return nil, err
+	}
+
+	// Verify patient exists.
+	_, err = s.patientRepo.GetByID(ctx, req.PatientID)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errors.New("patient not found")
+		}
+		return nil, err
+	}
+
+	// Check doctor availability within the organization.
+	existingAppointment, err := s.appointmentRepo.FindDoctorAppointment(
 		ctx,
+		organizationID,
 		req.DoctorID,
+		req.AppointmentDate,
+		req.AppointmentTime,
 	)
-
-	if err != nil {
-		return nil, errors.New("doctor not found")
-	}
-
-	// --------------------------------------------------------
-	// Check Patient Exists
-	// --------------------------------------------------------
-
-	_, err = s.patientRepo.GetByID(
-		ctx,
-		req.PatientID,
-	)
-
-	if err != nil {
-		return nil, errors.New("patient not found")
-	}
-
-	// --------------------------------------------------------
-	// Check Doctor Slot
-	// --------------------------------------------------------
-
-	existingAppointment, err :=
-		s.appointmentRepo.FindDoctorAppointment(
-			ctx,
-			req.DoctorID,
-			req.AppointmentDate,
-			req.AppointmentTime,
-		)
-
 	if err != nil {
 		return nil, err
 	}
 
 	if existingAppointment != nil {
-		return nil, errors.New(
-			"doctor already has an appointment at this time",
-		)
+		return nil, errors.New("doctor already has an appointment at this time")
 	}
-
-	// --------------------------------------------------------
-	// Create Appointment
-	// --------------------------------------------------------
 
 	now := time.Now()
 
-	appointment := &appointmentModel.Appointment{
-		ID:              primitive.NewObjectID(),
+	appointment := &model.Appointment{
+		OrganizationID:  organizationID,
 		DoctorID:        doctorID,
 		PatientID:       patientID,
 		AppointmentDate: req.AppointmentDate,
 		AppointmentTime: req.AppointmentTime,
 		Reason:          req.Reason,
 		Status:          "Booked",
-
-		// Important:
-		// Reminder has NOT been sent yet.
-		ReminderSent: false,
-
-		CreatedAt: now,
-		UpdatedAt: now,
+		ReminderSent:    false,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 
-	// --------------------------------------------------------
-	// Save Appointment
-	// --------------------------------------------------------
-
-	err = s.appointmentRepo.Create(
-		ctx,
-		appointment,
-	)
-
-	if err != nil {
+	if err := s.appointmentRepo.Create(ctx, appointment); err != nil {
 		return nil, err
 	}
-
-	// IMPORTANT:
-	// Do NOT send notification here.
-	//
-	// Cron will check every minute and send the
-	// notification approximately 30 minutes before
-	// appointment time.
 
 	return appointment, nil
 }
 
-// ============================================================
 // GET ALL APPOINTMENTS
-// ============================================================
 
 func (s *appointmentService) GetAllAppointments(
 	ctx context.Context,
-) ([]appointmentModel.Appointment, error) {
+	organizationID primitive.ObjectID,
+) ([]model.Appointment, error) {
 
-	return s.appointmentRepo.GetAll(ctx)
+	if organizationID.IsZero() {
+		return nil, errors.New("organization ID is required")
+	}
+
+	return s.appointmentRepo.GetAll(ctx, organizationID)
 }
 
-// ============================================================
 // GET APPOINTMENT BY ID
-// ============================================================
 
 func (s *appointmentService) GetAppointmentByID(
 	ctx context.Context,
+	organizationID primitive.ObjectID,
 	id string,
-) (*appointmentModel.Appointment, error) {
+) (*model.Appointment, error) {
 
-	if id == "" {
-		return nil, errors.New("appointment id is required")
+	if organizationID.IsZero() {
+		return nil, errors.New("organization ID is required")
 	}
 
-	return s.appointmentRepo.GetByID(
-		ctx,
-		id,
-	)
+	if _, err := primitive.ObjectIDFromHex(id); err != nil {
+		return nil, errors.New("invalid appointment ID")
+	}
+
+	return s.appointmentRepo.GetByID(ctx, organizationID, id)
 }
 
-// ============================================================
-// GET UPCOMING APPOINTMENTS
-// ============================================================
-//
-// Used by:
-//
-// appointmentreminder/cron.go
-//
-// Cron asks:
-//
-// "Give me appointments approximately 30 minutes
-// from now."
-//
-// ============================================================
+// UPDATE APPOINTMENT
+
+func (s *appointmentService) UpdateAppointment(
+	ctx context.Context,
+	organizationID primitive.ObjectID,
+	id string,
+	req dto.UpdateAppointmentRequest,
+) (*model.Appointment, error) {
+
+	if organizationID.IsZero() {
+		return nil, errors.New("organization ID is required")
+	}
+
+	if _, err := primitive.ObjectIDFromHex(id); err != nil {
+		return nil, errors.New("invalid appointment ID")
+	}
+
+	appointment, err := s.appointmentRepo.GetByID(
+		ctx,
+		organizationID,
+		id,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update doctor if provided.
+	if req.DoctorID != "" {
+		doctorID, err := primitive.ObjectIDFromHex(req.DoctorID)
+		if err != nil {
+			return nil, errors.New("invalid doctor ID")
+		}
+
+		_, err = s.doctorRepo.GetByID(
+			ctx,
+			organizationID,
+			req.DoctorID,
+		)
+		if err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				return nil, errors.New("doctor not found in this organization")
+			}
+			return nil, err
+		}
+
+		appointment.DoctorID = doctorID
+	}
+
+	// Update patient if provided.
+	if req.PatientID != "" {
+		patientID, err := primitive.ObjectIDFromHex(req.PatientID)
+		if err != nil {
+			return nil, errors.New("invalid patient ID")
+		}
+
+		_, err = s.patientRepo.GetByID(ctx, req.PatientID)
+		if err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				return nil, errors.New("patient not found")
+			}
+			return nil, err
+		}
+
+		appointment.PatientID = patientID
+	}
+
+	if !req.AppointmentDate.IsZero() {
+		appointment.AppointmentDate = req.AppointmentDate
+	}
+
+	if req.AppointmentTime != "" {
+		appointment.AppointmentTime = req.AppointmentTime
+	}
+
+	if req.Reason != "" {
+		appointment.Reason = req.Reason
+	}
+
+	if req.Status != "" {
+		appointment.Status = req.Status
+	}
+
+	// Check availability if the appointment slot changed.
+	slotChanged := req.DoctorID != "" ||
+		!req.AppointmentDate.IsZero() ||
+		req.AppointmentTime != ""
+
+	if slotChanged &&
+		appointment.Status != "Cancelled" &&
+		appointment.Status != "Rejected" {
+
+		existingAppointment, err := s.appointmentRepo.FindDoctorAppointment(
+			ctx,
+			organizationID,
+			appointment.DoctorID.Hex(),
+			appointment.AppointmentDate,
+			appointment.AppointmentTime,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Ignore the appointment currently being updated.
+		if existingAppointment != nil &&
+			existingAppointment.ID != appointment.ID {
+			return nil, errors.New("doctor already has an appointment at this time")
+		}
+	}
+
+	appointment.UpdatedAt = time.Now()
+
+	if err := s.appointmentRepo.Update(
+		ctx,
+		organizationID,
+		appointment,
+	); err != nil {
+		return nil, err
+	}
+
+	return appointment, nil
+}
+
+// DELETE APPOINTMENT
+
+func (s *appointmentService) DeleteAppointment(
+	ctx context.Context,
+	organizationID primitive.ObjectID,
+	id string,
+) error {
+
+	if organizationID.IsZero() {
+		return errors.New("organization ID is required")
+	}
+
+	if _, err := primitive.ObjectIDFromHex(id); err != nil {
+		return errors.New("invalid appointment ID")
+	}
+
+	return s.appointmentRepo.Delete(ctx, organizationID, id)
+}
+
+// GET UPCOMING APPOINTMENTS - CRON
 
 func (s *appointmentService) GetUpcomingAppointments(
 	ctx context.Context,
 	startTime time.Time,
 	endTime time.Time,
-) ([]appointmentModel.Appointment, error) {
+) ([]model.Appointment, error) {
 
 	if endTime.Before(startTime) {
-		return nil, errors.New(
-			"invalid appointment time range",
-		)
+		return nil, errors.New("end time cannot be before start time")
 	}
 
-	// --------------------------------------------------------
-	// Get appointments from repository
-	// --------------------------------------------------------
-
-	appointments, err :=
-		s.appointmentRepo.FindUpcomingAppointments(
-			ctx,
-			startTime,
-			endTime,
-		)
-
-	if err != nil {
-		return nil, err
-	}
-
-	result :=
-		make([]appointmentModel.Appointment, 0)
-
-	// --------------------------------------------------------
-	// Convert appointment date + time
-	// --------------------------------------------------------
-
-	for _, appointment := range appointments {
-
-		// Only booked appointments
-		if appointment.Status != "Booked" {
-			continue
-		}
-
-		// Already reminded?
-		if appointment.ReminderSent {
-			continue
-		}
-
-		// ----------------------------------------------------
-		// Parse appointment time
-		// Example:
-		//
-		// "14:30"
-		// ----------------------------------------------------
-
-		parsedTime, err :=
-			time.Parse(
-				"15:04",
-				appointment.AppointmentTime,
-			)
-
-		if err != nil {
-			continue
-		}
-
-		// ----------------------------------------------------
-		// Combine date + time
-		// ----------------------------------------------------
-
-		appointmentDateTime := time.Date(
-			appointment.AppointmentDate.Year(),
-			appointment.AppointmentDate.Month(),
-			appointment.AppointmentDate.Day(),
-			parsedTime.Hour(),
-			parsedTime.Minute(),
-			0,
-			0,
-			time.Local,
-		)
-
-		// ----------------------------------------------------
-		// Check reminder window
-		// ----------------------------------------------------
-
-		if !appointmentDateTime.Before(startTime) &&
-			appointmentDateTime.Before(endTime) {
-
-			result = append(
-				result,
-				appointment,
-			)
-		}
-	}
-
-	return result, nil
+	return s.appointmentRepo.FindUpcomingAppointments(
+		ctx,
+		startTime,
+		endTime,
+	)
 }
 
-// ============================================================
-// UPDATE APPOINTMENT
-// ============================================================
+// SEND APPOINTMENT REMINDER - CRON
 
-func (s *appointmentService) UpdateAppointment(
+func (s *appointmentService) SendAppointmentReminder(
 	ctx context.Context,
-	id string,
-	req appointmentDTO.UpdateAppointmentRequest,
-) (*appointmentModel.Appointment, error) {
+	appointment model.Appointment,
+) error {
 
-	// --------------------------------------------------------
-	// Get Existing Appointment
-	// --------------------------------------------------------
-
-	appointment, err :=
-		s.appointmentRepo.GetByID(
-			ctx,
-			id,
-		)
-
-	if err != nil {
-		return nil, errors.New(
-			"appointment not found",
-		)
+	if s.notificationSvc == nil {
+		return errors.New("notification service is not available")
 	}
 
-	// --------------------------------------------------------
-	// Update Doctor
-	// --------------------------------------------------------
-
-	if req.DoctorID != "" {
-
-		_, err :=
-			s.doctorRepo.GetByID(
-				ctx,
-				req.DoctorID,
-			)
-
-		if err != nil {
-			return nil, errors.New(
-				"doctor not found",
-			)
-		}
-
-		doctorID, err :=
-			primitive.ObjectIDFromHex(
-				req.DoctorID,
-			)
-
-		if err != nil {
-			return nil, errors.New(
-				"invalid doctor id",
-			)
-		}
-
-		appointment.DoctorID = doctorID
-
-		// Appointment changed.
-		// Allow reminder to be sent again.
-		appointment.ReminderSent = false
-	}
-
-	// --------------------------------------------------------
-	// Update Patient
-	// --------------------------------------------------------
-
-	if req.PatientID != "" {
-
-		_, err :=
-			s.patientRepo.GetByID(
-				ctx,
-				req.PatientID,
-			)
-
-		if err != nil {
-			return nil, errors.New(
-				"patient not found",
-			)
-		}
-
-		patientID, err :=
-			primitive.ObjectIDFromHex(
-				req.PatientID,
-			)
-
-		if err != nil {
-			return nil, errors.New(
-				"invalid patient id",
-			)
-		}
-
-		appointment.PatientID = patientID
-
-		appointment.ReminderSent = false
-	}
-
-	// --------------------------------------------------------
-	// Update Appointment Date
-	// --------------------------------------------------------
-
-	if !req.AppointmentDate.IsZero() {
-
-		appointment.AppointmentDate =
-			req.AppointmentDate
-
-		// Date changed.
-		// Allow reminder again.
-		appointment.ReminderSent = false
-	}
-
-	// --------------------------------------------------------
-	// Update Appointment Time
-	// --------------------------------------------------------
-
-	if req.AppointmentTime != "" {
-
-		appointment.AppointmentTime =
-			req.AppointmentTime
-
-		// Time changed.
-		// Allow reminder again.
-		appointment.ReminderSent = false
-	}
-
-	// --------------------------------------------------------
-	// Update Reason
-	// --------------------------------------------------------
-
-	if req.Reason != "" {
-
-		appointment.Reason =
-			req.Reason
-	}
-
-	// --------------------------------------------------------
-	// Update Status
-	// --------------------------------------------------------
-
-	if req.Status != "" {
-
-		appointment.Status =
-			req.Status
-	}
-
-	appointment.UpdatedAt = time.Now()
-
-	// --------------------------------------------------------
-	// Save
-	// --------------------------------------------------------
-
-	err = s.appointmentRepo.Update(
+	return s.notificationSvc.SendAppointmentReminder(
 		ctx,
 		appointment,
 	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return appointment, nil
 }
 
-// ============================================================
-// DELETE APPOINTMENT
-// ============================================================
-
-func (s *appointmentService) DeleteAppointment(
-	ctx context.Context,
-	id string,
-) error {
-
-	// --------------------------------------------------------
-	// Check Appointment Exists
-	// --------------------------------------------------------
-
-	_, err :=
-		s.appointmentRepo.GetByID(
-			ctx,
-			id,
-		)
-
-	if err != nil {
-		return errors.New(
-			"appointment not found",
-		)
-	}
-
-	// --------------------------------------------------------
-	// Delete
-	// --------------------------------------------------------
-
-	return s.appointmentRepo.Delete(
-		ctx,
-		id,
-	)
-}
-
-// ============================================================
-// MARK REMINDER SENT
-// ============================================================
-//
-// Called by:
-//
-// appointmentreminder/cron.go
-//
-// After Firebase notification succeeds:
-//
-// ReminderSent = true
-//
-// This prevents duplicate notifications.
-//
-// ============================================================
+// MARK REMINDER SENT - CRON
 
 func (s *appointmentService) MarkReminderSent(
 	ctx context.Context,
-	id string,
+	id primitive.ObjectID,
 ) error {
 
-	if id == "" {
-		return errors.New(
-			"appointment id is required",
-		)
+	if id.IsZero() {
+		return errors.New("appointment ID is required")
 	}
 
-	objectID, err :=
-		primitive.ObjectIDFromHex(id)
-
-	if err != nil {
-		return errors.New(
-			"invalid appointment ID",
-		)
-	}
-
-	return s.appointmentRepo.MarkReminderSent(
-		ctx,
-		objectID,
-	)
+	return s.appointmentRepo.MarkReminderSent(ctx, id)
 }
-
-// ============================================================
-// COMPILE-TIME SAFETY
-// ============================================================
 
 var _ AppointmentService = (*appointmentService)(nil)

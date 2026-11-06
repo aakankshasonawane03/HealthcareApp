@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"time"
-	
 
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/appointment/model"
 
@@ -13,7 +12,6 @@ import (
 )
 
 type AppointmentRepository interface {
-
 	Create(
 		ctx context.Context,
 		appointment *model.Appointment,
@@ -21,38 +19,41 @@ type AppointmentRepository interface {
 
 	GetAll(
 		ctx context.Context,
+		organizationID primitive.ObjectID,
 	) ([]model.Appointment, error)
 
 	GetByID(
 		ctx context.Context,
+		organizationID primitive.ObjectID,
 		id string,
 	) (*model.Appointment, error)
 
 	Update(
 		ctx context.Context,
+		organizationID primitive.ObjectID,
 		appointment *model.Appointment,
 	) error
 
 	Delete(
 		ctx context.Context,
+		organizationID primitive.ObjectID,
 		id string,
 	) error
 
 	FindDoctorAppointment(
 		ctx context.Context,
+		organizationID primitive.ObjectID,
 		doctorID string,
-		appointmentDate time.Time,
+		date time.Time,
 		appointmentTime string,
 	) (*model.Appointment, error)
 
-	// NEW
 	FindUpcomingAppointments(
 		ctx context.Context,
-		startDate time.Time,
-		endDate time.Time,
+		startTime time.Time,
+		endTime time.Time,
 	) ([]model.Appointment, error)
 
-	// NEW
 	MarkReminderSent(
 		ctx context.Context,
 		id primitive.ObjectID,
@@ -66,84 +67,79 @@ type appointmentRepository struct {
 func NewAppointmentRepository(
 	collection *mongo.Collection,
 ) AppointmentRepository {
-
 	return &appointmentRepository{
 		collection: collection,
 	}
 }
 
-// --------------------------------------------------
-// Create
-// --------------------------------------------------
-
+// CREATE APPOINTMENT
 func (r *appointmentRepository) Create(
 	ctx context.Context,
 	appointment *model.Appointment,
 ) error {
+	if appointment == nil {
+		return mongo.ErrNilDocument
+	}
 
-	_, err := r.collection.InsertOne(
-		ctx,
-		appointment,
-	)
+	if appointment.OrganizationID.IsZero() {
+		return mongo.ErrNoDocuments
+	}
 
+	_, err := r.collection.InsertOne(ctx, appointment)
 	return err
 }
 
-// --------------------------------------------------
-// Get All
-// --------------------------------------------------
-
+// GET ALL APPOINTMENTS BY ORGANIZATION
 func (r *appointmentRepository) GetAll(
 	ctx context.Context,
+	organizationID primitive.ObjectID,
 ) ([]model.Appointment, error) {
+	if organizationID.IsZero() {
+		return nil, mongo.ErrNoDocuments
+	}
 
-	var appointments []model.Appointment
+	filter := bson.M{
+		"organization_id": organizationID,
+	}
 
-	cursor, err := r.collection.Find(
-		ctx,
-		bson.M{},
-	)
-
+	cursor, err := r.collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
-
 	defer cursor.Close(ctx)
 
-	if err := cursor.All(
-		ctx,
-		&appointments,
-	); err != nil {
+	appointments := make([]model.Appointment, 0)
+
+	if err := cursor.All(ctx, &appointments); err != nil {
 		return nil, err
 	}
 
 	return appointments, nil
 }
 
-// --------------------------------------------------
-// Get By ID
-// --------------------------------------------------
-
+// GET APPOINTMENT BY ID AND ORGANIZATION
 func (r *appointmentRepository) GetByID(
 	ctx context.Context,
+	organizationID primitive.ObjectID,
 	id string,
 ) (*model.Appointment, error) {
+	if organizationID.IsZero() {
+		return nil, mongo.ErrNoDocuments
+	}
 
 	objectID, err := primitive.ObjectIDFromHex(id)
-
 	if err != nil {
 		return nil, err
 	}
 
+	filter := bson.M{
+		"_id":             objectID,
+		"organization_id": organizationID,
+	}
+
 	var appointment model.Appointment
 
-	err = r.collection.FindOne(
-		ctx,
-		bson.M{
-			"_id": objectID,
-		},
-	).Decode(&appointment)
-
+	err = r.collection.FindOne(ctx, filter).Decode(&appointment)
 	if err != nil {
 		return nil, err
 	}
@@ -151,97 +147,112 @@ func (r *appointmentRepository) GetByID(
 	return &appointment, nil
 }
 
-// --------------------------------------------------
-// Update
-// --------------------------------------------------
-
+// UPDATE APPOINTMENT BY ID AND ORGANIZATION
 func (r *appointmentRepository) Update(
 	ctx context.Context,
+	organizationID primitive.ObjectID,
 	appointment *model.Appointment,
 ) error {
+	if appointment == nil {
+		return mongo.ErrNilDocument
+	}
+
+	if organizationID.IsZero() {
+		return mongo.ErrNoDocuments
+	}
 
 	filter := bson.M{
-		"_id": appointment.ID,
+		"_id":             appointment.ID,
+		"organization_id": organizationID,
 	}
 
 	update := bson.M{
 		"$set": bson.M{
-			"doctor_id":         appointment.DoctorID,
-			"patient_id":        appointment.PatientID,
-			"appointment_date":  appointment.AppointmentDate,
-			"appointment_time":  appointment.AppointmentTime,
-			"reason":            appointment.Reason,
-			"status":            appointment.Status,
-			"reminder_sent":     appointment.ReminderSent,
-			"updated_at":        appointment.UpdatedAt,
+			"doctor_id":        appointment.DoctorID,
+			"patient_id":       appointment.PatientID,
+			"appointment_date": appointment.AppointmentDate,
+			"appointment_time": appointment.AppointmentTime,
+			"reason":           appointment.Reason,
+			"status":           appointment.Status,
+			"reminder_sent":    appointment.ReminderSent,
+			"updated_at":       appointment.UpdatedAt,
 		},
 	}
 
-	_, err := r.collection.UpdateOne(
-		ctx,
-		filter,
-		update,
-	)
-
-	return err
-}
-
-// --------------------------------------------------
-// Delete
-// --------------------------------------------------
-
-func (r *appointmentRepository) Delete(
-	ctx context.Context,
-	id string,
-) error {
-
-	objectID, err := primitive.ObjectIDFromHex(id)
-
+	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return err
 	}
 
-	_, err = r.collection.DeleteOne(
-		ctx,
-		bson.M{
-			"_id": objectID,
-		},
-	)
+	if result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
 
-	return err
+	return nil
 }
 
-// --------------------------------------------------
-// Check Doctor Slot
-// --------------------------------------------------
+// DELETE APPOINTMENT BY ID AND ORGANIZATION
+func (r *appointmentRepository) Delete(
+	ctx context.Context,
+	organizationID primitive.ObjectID,
+	id string,
+) error {
+	if organizationID.IsZero() {
+		return mongo.ErrNoDocuments
+	}
 
+	objectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return err
+	}
+
+	filter := bson.M{
+		"_id":             objectID,
+		"organization_id": organizationID,
+	}
+
+	result, err := r.collection.DeleteOne(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	if result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
+}
+
+// CHECK DOCTOR APPOINTMENT SLOT WITHIN ORGANIZATION
 func (r *appointmentRepository) FindDoctorAppointment(
 	ctx context.Context,
+	organizationID primitive.ObjectID,
 	doctorID string,
-	appointmentDate time.Time,
+	date time.Time,
 	appointmentTime string,
 ) (*model.Appointment, error) {
+	if organizationID.IsZero() {
+		return nil, mongo.ErrNoDocuments
+	}
 
-	objectID, err := primitive.ObjectIDFromHex(
-		doctorID,
-	)
-
+	objectID, err := primitive.ObjectIDFromHex(doctorID)
 	if err != nil {
 		return nil, err
 	}
 
 	filter := bson.M{
+		"organization_id":  organizationID,
 		"doctor_id":        objectID,
-		"appointment_date": appointmentDate,
+		"appointment_date": date,
 		"appointment_time": appointmentTime,
+		"status": bson.M{
+			"$nin": []string{"Cancelled", "Rejected"},
+		},
 	}
 
 	var appointment model.Appointment
 
-	err = r.collection.FindOne(
-		ctx,
-		filter,
-	).Decode(&appointment)
+	err = r.collection.FindOne(ctx, filter).Decode(&appointment)
 
 	if err == mongo.ErrNoDocuments {
 		return nil, nil
@@ -254,64 +265,43 @@ func (r *appointmentRepository) FindDoctorAppointment(
 	return &appointment, nil
 }
 
-// ==================================================
-// FIND UPCOMING APPOINTMENTS
-// ==================================================
-
+// FIND UPCOMING APPOINTMENTS - CRON
 func (r *appointmentRepository) FindUpcomingAppointments(
 	ctx context.Context,
-	startDate time.Time,
-	endDate time.Time,
+	startTime time.Time,
+	endTime time.Time,
 ) ([]model.Appointment, error) {
-
 	filter := bson.M{
-		"status": "Booked",
-
+		"status":        "Booked",
 		"reminder_sent": false,
-
 		"appointment_date": bson.M{
-			"$gte": startDate,
-			"$lte": endDate,
+			"$gte": startTime,
+			"$lte": endTime,
 		},
 	}
 
-	cursor, err := r.collection.Find(
-		ctx,
-		filter,
-	)
-
+	cursor, err := r.collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
-
 	defer cursor.Close(ctx)
 
-	var appointments []model.Appointment
+	appointments := make([]model.Appointment, 0)
 
-	if err := cursor.All(
-		ctx,
-		&appointments,
-	); err != nil {
+	if err := cursor.All(ctx, &appointments); err != nil {
 		return nil, err
 	}
 
 	return appointments, nil
 }
 
-// ==================================================
-// MARK REMINDER SENT
-// ==================================================
-
+// MARK REMINDER SENT - CRON
 func (r *appointmentRepository) MarkReminderSent(
 	ctx context.Context,
 	id primitive.ObjectID,
 ) error {
-
 	filter := bson.M{
-		"_id": id,
-
-		// Important:
-		// Only update if reminder has NOT already been sent.
+		"_id":           id,
 		"reminder_sent": false,
 	}
 
@@ -322,12 +312,7 @@ func (r *appointmentRepository) MarkReminderSent(
 		},
 	}
 
-	result, err := r.collection.UpdateOne(
-		ctx,
-		filter,
-		update,
-	)
-
+	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return err
 	}
@@ -338,3 +323,5 @@ func (r *appointmentRepository) MarkReminderSent(
 
 	return nil
 }
+
+var _ AppointmentRepository = (*appointmentRepository)(nil)

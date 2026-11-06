@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -293,5 +294,54 @@ func (h *AdminHandler) GetAppointments(c *gin.Context) {
 		"success": true,
 		"message": "Appointments fetched successfully",
 		"data":    appointments,
+	})
+}
+
+// CreateOrganizationOwner creates an Organization Owner account.
+func (h *AdminHandler) CreateOrganizationOwner(c *gin.Context) {
+
+	var request dto.CreateOrganizationOwnerDTO
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request body",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	user, err := h.service.CreateOrganizationOwner(
+		c.Request.Context(),
+		request,
+	)
+
+	if err != nil {
+		statusCode := http.StatusBadRequest
+
+		if strings.Contains(strings.ToLower(err.Error()), "email already registered") {
+			statusCode = http.StatusConflict
+		}
+
+		c.JSON(statusCode, gin.H{
+			"success": false,
+			"message": "Failed to create Organization Owner",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Return safe user details; never return the password.
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "Organization Owner created successfully",
+		"data": gin.H{
+			"id":         user.ID.Hex(),
+			"name":       user.Name,
+			"email":      user.Email,
+			"role":       user.Role,
+			"is_active":  user.IsActive,
+			"created_at": user.CreatedAt,
+		},
 	})
 }

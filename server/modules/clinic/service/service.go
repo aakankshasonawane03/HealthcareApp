@@ -20,6 +20,7 @@ type ClinicService interface {
 	DeleteClinic(ctx context.Context, organizationID, id primitive.ObjectID) error
 }
 
+
 type clinicService struct {
 	repo repository.ClinicRepository
 }
@@ -165,6 +166,9 @@ func (s *clinicService) UpdateClinic(
 	}
 	if clinic.Phone == "" {
 		return errors.New("clinic phone is required")
+	}
+	if clinic == nil {
+		return errors.New("clinic data is required")
 	}
 
 	// Do not allow request data to change clinic ownership.

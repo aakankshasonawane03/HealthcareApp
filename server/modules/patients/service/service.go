@@ -14,6 +14,13 @@ import (
 
 type PatientService interface {
 	CreatePatient(ctx context.Context, req dto.CreatePatientRequest) (*model.Patient, error)
+
+	CreateMyPatientProfile(
+		ctx context.Context,
+		userID string,
+		req dto.CreateMyPatientProfileRequest,
+	) (*model.Patient, error)
+
 	GetAllPatients(ctx context.Context) ([]model.Patient, error)
 	GetPatientByID(ctx context.Context, id string) (*model.Patient, error)
 	GetMyPatient(ctx context.Context, userID string) (*model.Patient, error)
@@ -31,8 +38,7 @@ func NewPatientService(repo repository.PatientRepository) PatientService {
 	}
 }
 
-// CreatePatient creates a patient record.
-// The caller must be authorized to create patients.
+// CreatePatient creates a patient record through the Admin workflow.
 func (s *patientService) CreatePatient(
 	ctx context.Context,
 	req dto.CreatePatientRequest,
@@ -71,9 +77,69 @@ func (s *patientService) CreatePatient(
 		UpdatedAt:        now,
 	}
 
-	// Do not accept an arbitrary user ID from an untrusted request.
-	// Link the patient to a registered account through a trusted,
-	// authorized workflow.
+	if err := s.repo.Create(ctx, patient); err != nil {
+		return nil, err
+	}
+
+	return patient, nil
+}
+
+// CreateMyPatientProfile creates a patient profile linked to the
+// authenticated user's account. userID must come from the JWT context.
+func (s *patientService) CreateMyPatientProfile(
+	ctx context.Context,
+	userID string,
+	req dto.CreateMyPatientProfileRequest,
+) (*model.Patient, error) {
+	if userID == "" {
+		return nil, errors.New("authenticated user ID is missing")
+	}
+
+	// Check whether this account already has a patient profile.
+	exists, err := s.repo.ExistsByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, errors.New("patient profile already exists for this account")
+	}
+
+	// Check duplicate email.
+	existing, err := s.repo.GetByEmail(ctx, req.Email)
+	if err == nil && existing != nil {
+		return nil, errors.New("patient email already exists")
+	}
+	if err != nil && !errors.Is(err, repository.ErrPatientNotFound) {
+		return nil, err
+	}
+
+	// Check duplicate phone.
+	existing, err = s.repo.GetByPhone(ctx, req.Phone)
+	if err == nil && existing != nil {
+		return nil, errors.New("patient phone already exists")
+	}
+	if err != nil && !errors.Is(err, repository.ErrPatientNotFound) {
+		return nil, err
+	}
+
+	now := time.Now()
+
+	patient := &model.Patient{
+		ID:               primitive.NewObjectID(),
+		UserID:           userID,
+		FirstName:        req.FirstName,
+		LastName:         req.LastName,
+		Email:            req.Email,
+		Phone:            req.Phone,
+		Gender:           req.Gender,
+		DateOfBirth:      req.DateOfBirth,
+		BloodGroup:       req.BloodGroup,
+		Address:          req.Address,
+		EmergencyContact: req.EmergencyContact,
+		IsActive:         true,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
 
 	if err := s.repo.Create(ctx, patient); err != nil {
 		return nil, err
@@ -83,7 +149,6 @@ func (s *patientService) CreatePatient(
 }
 
 // GetAllPatients retrieves all patient records.
-// The route must restrict this operation to authorized roles.
 func (s *patientService) GetAllPatients(
 	ctx context.Context,
 ) ([]model.Patient, error) {
@@ -91,21 +156,14 @@ func (s *patientService) GetAllPatients(
 }
 
 // GetPatientByID retrieves a patient by record ID.
-// Authorization must be checked before exposing this operation.
 func (s *patientService) GetPatientByID(
 	ctx context.Context,
 	id string,
 ) (*model.Patient, error) {
-	patient, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return patient, nil
+	return s.repo.GetByID(ctx, id)
 }
 
-// GetMyPatient retrieves only the patient record linked to userID.
-// userID must come from the authenticated JWT context, not the request body.
+// GetMyPatient retrieves the patient record linked to userID.
 func (s *patientService) GetMyPatient(
 	ctx context.Context,
 	userID string,
@@ -119,15 +177,13 @@ func (s *patientService) GetMyPatient(
 		if errors.Is(err, repository.ErrPatientNotFound) {
 			return nil, errors.New("patient profile not found for this account")
 		}
-
 		return nil, err
 	}
 
 	return patient, nil
 }
 
-// UpdatePatient updates permitted profile fields.
-// The route must restrict this operation to authorized roles.
+// UpdatePatient updates permitted patient fields.
 func (s *patientService) UpdatePatient(
 	ctx context.Context,
 	id string,
@@ -169,10 +225,7 @@ func (s *patientService) UpdatePatient(
 		patient.EmergencyContact = req.EmergencyContact
 	}
 
-	// Intentionally do not update IsActive here.
-	// Account activation/deactivation should be a separate,
-	// explicitly authorized admin operation.
-
+	// IsActive is intentionally not changed here.
 	patient.UpdatedAt = time.Now()
 
 	if err := s.repo.Update(ctx, patient); err != nil {
@@ -183,7 +236,6 @@ func (s *patientService) UpdatePatient(
 }
 
 // DeletePatient deletes a patient record.
-// The route must restrict this operation to authorized roles.
 func (s *patientService) DeletePatient(
 	ctx context.Context,
 	id string,

@@ -11,6 +11,9 @@ import (
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/admin/dto"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/admin/model"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/admin/repository"
+
+	authmodel "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/auth/model"
+	authservice "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/auth/service"
 )
 
 type AdminService interface {
@@ -28,23 +31,67 @@ type AdminService interface {
 	DeleteClinic(ctx context.Context, id string) error
 
 	GetAppointments(ctx context.Context) ([]model.AppointmentSummary, error)
+
+	CreateOrganizationOwner(
+		ctx context.Context,
+		request dto.CreateOrganizationOwnerDTO,
+	) (*authmodel.User, error)
 }
 
 type adminService struct {
-	repo repository.AdminRepository
+	repo        repository.AdminRepository
+	authService authservice.AuthService
 }
 
-func NewAdminService(repo repository.AdminRepository) AdminService {
+func NewAdminService(
+	repo repository.AdminRepository,
+	authSvc authservice.AuthService,
+) AdminService {
 	return &adminService{
-		repo: repo,
+		repo:        repo,
+		authService: authSvc,
 	}
+}
+
+// CreateOrganizationOwner creates an Organization Owner account.
+func (s *adminService) CreateOrganizationOwner(
+	ctx context.Context,
+	request dto.CreateOrganizationOwnerDTO,
+) (*authmodel.User, error) {
+
+	name := strings.TrimSpace(request.Name)
+	email := strings.ToLower(strings.TrimSpace(request.Email))
+
+	if len(name) < 2 {
+		return nil, errors.New("name must contain at least 2 characters")
+	}
+
+	if email == "" {
+		return nil, errors.New("email is required")
+	}
+
+	if len(request.Password) < 8 {
+		return nil, errors.New("password must contain at least 8 characters")
+	}
+
+	user := &authmodel.User{
+		Name:     name,
+		Email:    email,
+		Password: request.Password,
+		Role:     "ORGANIZATION_OWNER",
+	}
+
+	if err := s.authService.Register(ctx, user); err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }
 
 // GetDashboard returns admin dashboard statistics.
 func (s *adminService) GetDashboard(
 	ctx context.Context,
 ) (*model.Dashboard, error) {
-
 	return s.repo.GetDashboard(ctx)
 }
 
@@ -52,7 +99,6 @@ func (s *adminService) GetDashboard(
 func (s *adminService) GetUsers(
 	ctx context.Context,
 ) ([]model.UserSummary, error) {
-
 	return s.repo.GetUsers(ctx)
 }
 
@@ -85,7 +131,6 @@ func (s *adminService) UpdateUserStatus(
 func (s *adminService) GetDoctors(
 	ctx context.Context,
 ) ([]model.DoctorSummary, error) {
-
 	return s.repo.GetDoctors(ctx)
 }
 
@@ -93,7 +138,6 @@ func (s *adminService) GetDoctors(
 func (s *adminService) GetPatients(
 	ctx context.Context,
 ) ([]model.PatientSummary, error) {
-
 	return s.repo.GetPatients(ctx)
 }
 
@@ -101,7 +145,6 @@ func (s *adminService) GetPatients(
 func (s *adminService) GetClinics(
 	ctx context.Context,
 ) ([]model.ClinicSummary, error) {
-
 	return s.repo.GetClinics(ctx)
 }
 
@@ -210,6 +253,5 @@ func (s *adminService) DeleteClinic(
 func (s *adminService) GetAppointments(
 	ctx context.Context,
 ) ([]model.AppointmentSummary, error) {
-
 	return s.repo.GetAppointments(ctx)
 }

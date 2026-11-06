@@ -1,26 +1,96 @@
+
 package handler
 
 import (
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/doctor/dto"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/doctor/service"
+	orgService "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/organization/service"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type DoctorHandler struct {
-	service service.DoctorService
+	service    service.DoctorService
+	orgService orgService.OrganizationService
 }
 
-func NewDoctorHandler(service service.DoctorService) *DoctorHandler {
+func NewDoctorHandler(
+	service service.DoctorService,
+	orgService orgService.OrganizationService,
+) *DoctorHandler {
 	return &DoctorHandler{
-		service: service,
+		service:    service,
+		orgService: orgService,
 	}
 }
 
-// Create Doctor
+func (h *DoctorHandler) getAuthenticatedIDs(
+	c *gin.Context,
+) (primitive.ObjectID, primitive.ObjectID, bool) {
+
+	userID := strings.TrimSpace(c.GetString("user_id"))
+
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Authenticated user ID is missing",
+		})
+		return primitive.NilObjectID, primitive.NilObjectID, false
+	}
+
+	userObjectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Invalid authenticated user ID",
+		})
+		return primitive.NilObjectID, primitive.NilObjectID, false
+	}
+
+	org, err := h.orgService.GetMyOrganization(
+		c.Request.Context(),
+		userObjectID,
+	)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "No organization associated with this account",
+			})
+			return primitive.NilObjectID, primitive.NilObjectID, false
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to retrieve organization",
+		})
+		return primitive.NilObjectID, primitive.NilObjectID, false
+	}
+
+	if org == nil || org.ID.IsZero() {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "Invalid organization",
+		})
+		return primitive.NilObjectID, primitive.NilObjectID, false
+	}
+
+	return org.ID, userObjectID, true
+}
+
 func (h *DoctorHandler) CreateDoctor(c *gin.Context) {
+
+	organizationID, userID, ok := h.getAuthenticatedIDs(c)
+	if !ok {
+		return
+	}
 
 	var req dto.CreateDoctorRequest
 
@@ -32,7 +102,12 @@ func (h *DoctorHandler) CreateDoctor(c *gin.Context) {
 		return
 	}
 
-	doctor, err := h.service.CreateDoctor(c.Request.Context(), req)
+	doctor, err := h.service.CreateDoctor(
+		c.Request.Context(),
+		organizationID,
+		userID,
+		req,
+	)
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -49,10 +124,17 @@ func (h *DoctorHandler) CreateDoctor(c *gin.Context) {
 	})
 }
 
-// Get All Doctors
 func (h *DoctorHandler) GetAllDoctors(c *gin.Context) {
 
-	doctors, err := h.service.GetAllDoctors(c.Request.Context())
+	organizationID, _, ok := h.getAuthenticatedIDs(c)
+	if !ok {
+		return
+	}
+
+	doctors, err := h.service.GetAllDoctors(
+		c.Request.Context(),
+		organizationID,
+	)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -64,19 +146,34 @@ func (h *DoctorHandler) GetAllDoctors(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
+		"count":   len(doctors),
 		"data":    doctors,
 	})
 }
 
-// Get Doctor By ID
 func (h *DoctorHandler) GetDoctorByID(c *gin.Context) {
 
-	id := c.Param("id")
+	organizationID, _, ok := h.getAuthenticatedIDs(c)
+	if !ok {
+		return
+	}
 
-	doctor, err := h.service.GetDoctorByID(c.Request.Context(), id)
+	doctor, err := h.service.GetDoctorByID(
+		c.Request.Context(),
+		organizationID,
+		c.Param("id"),
+	)
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Doctor not found in your organization",
+			})
+			return
+		}
+
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": err.Error(),
 		})
@@ -89,10 +186,12 @@ func (h *DoctorHandler) GetDoctorByID(c *gin.Context) {
 	})
 }
 
-// Update Doctor
 func (h *DoctorHandler) UpdateDoctor(c *gin.Context) {
 
-	id := c.Param("id")
+	organizationID, _, ok := h.getAuthenticatedIDs(c)
+	if !ok {
+		return
+	}
 
 	var req dto.UpdateDoctorRequest
 
@@ -104,9 +203,22 @@ func (h *DoctorHandler) UpdateDoctor(c *gin.Context) {
 		return
 	}
 
-	doctor, err := h.service.UpdateDoctor(c.Request.Context(), id, req)
+	doctor, err := h.service.UpdateDoctor(
+		c.Request.Context(),
+		organizationID,
+		c.Param("id"),
+		req,
+	)
 
 	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Doctor not found in your organization",
+			})
+			return
+		}
+
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": err.Error(),
@@ -121,15 +233,29 @@ func (h *DoctorHandler) UpdateDoctor(c *gin.Context) {
 	})
 }
 
-// Delete Doctor
 func (h *DoctorHandler) DeleteDoctor(c *gin.Context) {
 
-	id := c.Param("id")
+	organizationID, _, ok := h.getAuthenticatedIDs(c)
+	if !ok {
+		return
+	}
 
-	err := h.service.DeleteDoctor(c.Request.Context(), id)
+	err := h.service.DeleteDoctor(
+		c.Request.Context(),
+		organizationID,
+		c.Param("id"),
+	)
 
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Doctor not found in your organization",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": err.Error(),
 		})

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/organization/model"
 	"go.mongodb.org/mongo-driver/bson"
@@ -11,7 +12,11 @@ import (
 
 type OrganizationRepository interface {
 	Create(ctx context.Context, org *model.Organization) error
-	GetByOwnerID(ctx context.Context, ownerID interface{}) (*model.Organization, error)
+
+	GetByOwnerID(
+		ctx context.Context,
+		ownerID primitive.ObjectID,
+	) (*model.Organization, error)
 }
 
 type organizationRepository struct {
@@ -36,7 +41,7 @@ func (r *organizationRepository) Create(
 
 func (r *organizationRepository) GetByOwnerID(
 	ctx context.Context,
-	ownerID interface{},
+	ownerID primitive.ObjectID,
 ) (*model.Organization, error) {
 	var org model.Organization
 

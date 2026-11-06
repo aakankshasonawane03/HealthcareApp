@@ -32,25 +32,33 @@ type organizationService struct {
 func NewOrganizationService(
 	repo repository.OrganizationRepository,
 ) OrganizationService {
-	return &organizationService{repo: repo}
+	return &organizationService{
+		repo: repo,
+	}
 }
 
+// Create creates an organization for the authenticated owner.
 func (s *organizationService) Create(
 	ctx context.Context,
 	ownerID primitive.ObjectID,
 	name, description, email, phone string,
 ) (*model.Organization, error) {
-	name = strings.TrimSpace(name)
+	if ownerID.IsZero() {
+		return nil, errors.New("valid organization owner is required")
+	}
 
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, errors.New("organization name is required")
 	}
 
-	// Initial business rule: one organization per doctor.
+	// Check whether the owner already has an organization.
 	existing, err := s.repo.GetByOwnerID(ctx, ownerID)
+
 	if err == nil && existing != nil {
 		return nil, errors.New("you already own an organization")
 	}
+
 	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
 		return nil, err
 	}
@@ -76,9 +84,14 @@ func (s *organizationService) Create(
 	return org, nil
 }
 
+// GetMyOrganization retrieves the organization owned by the user.
 func (s *organizationService) GetMyOrganization(
 	ctx context.Context,
 	ownerID primitive.ObjectID,
 ) (*model.Organization, error) {
+	if ownerID.IsZero() {
+		return nil, errors.New("valid organization owner is required")
+	}
+
 	return s.repo.GetByOwnerID(ctx, ownerID)
 }

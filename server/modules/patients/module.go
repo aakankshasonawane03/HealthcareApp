@@ -79,6 +79,17 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 		authorization.RequireRoles("ADMIN", "DOCTOR"),
 		m.handler.GetPatientByID,
 	)
+	protected.GET(
+		"/me",
+		authorization.RequireRoles("PATIENT"),
+		m.handler.GetMyPatient,
+	)
+	// Patients can create their own profile
+	protected.POST(
+		"/me/profile",
+		authorization.RequireRoles("PATIENT"),
+		m.handler.CreateMyPatientProfile,
+	)
 
 	// Only administrators can update or delete patient records
 	protected.PUT(
@@ -93,12 +104,6 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 		m.handler.DeletePatient,
 	)
 
-	// Patients can view their own linked profile
-	protected.GET(
-		"/me",
-		authorization.RequireRoles("PATIENT"),
-		m.handler.GetMyPatient,
-	)
 }
 
 var _ module.Module = (*Module)(nil)

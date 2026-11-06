@@ -1,49 +1,103 @@
 package handler
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
 
-	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/appointment/dto"
-	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/appointment/service"
+	"github.com/gin-gonic/gin"
+
+	appointmentDTO "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/appointment/dto"
+	appointmentService "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/appointment/service"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type AppointmentHandler struct {
-	service service.AppointmentService
+type Handler struct {
+	service appointmentService.AppointmentService
 }
 
-func NewAppointmentHandler(service service.AppointmentService) *AppointmentHandler {
-	return &AppointmentHandler{
+// Constructor
+func NewHandler(
+	service appointmentService.AppointmentService,
+) *Handler {
+	return &Handler{
 		service: service,
 	}
 }
 
-// Create Appointment
-func (h *AppointmentHandler) CreateAppointment(c *gin.Context) {
+// Get organization ID from Gin context.
+// Your authentication/organization middleware must set this value.
+func getOrganizationID(c *gin.Context) (primitive.ObjectID, bool) {
+	value, exists := c.Get("organization_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Organization ID not found in context",
+		})
+		return primitive.NilObjectID, false
+	}
 
-	var req dto.CreateAppointmentRequest
+	switch id := value.(type) {
+	case primitive.ObjectID:
+		if id.IsZero() {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "Invalid organization ID",
+			})
+			return primitive.NilObjectID, false
+		}
+		return id, true
+
+	case string:
+		objectID, err := primitive.ObjectIDFromHex(id)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "Invalid organization ID",
+			})
+			return primitive.NilObjectID, false
+		}
+		return objectID, true
+
+	default:
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Invalid organization ID format",
+		})
+		return primitive.NilObjectID, false
+	}
+}
+
+// CREATE APPOINTMENT
+func (h *Handler) CreateAppointment(c *gin.Context) {
+	organizationID, ok := getOrganizationID(c)
+	if !ok {
+		return
+	}
+
+	var req appointmentDTO.CreateAppointmentRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": err.Error(),
+			"message": "Invalid request body",
+			"error":   err.Error(),
 		})
 		return
 	}
 
 	appointment, err := h.service.CreateAppointment(
 		c.Request.Context(),
+		organizationID,
 		req,
 	)
-
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": err.Error(),
+			"message": "Failed to create appointment",
+			"error":   err.Error(),
 		})
 		return
 	}
-	
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
@@ -52,76 +106,94 @@ func (h *AppointmentHandler) CreateAppointment(c *gin.Context) {
 	})
 }
 
-// Get All Appointments
-func (h *AppointmentHandler) GetAllAppointments(c *gin.Context) {
+// GET ALL APPOINTMENTS
+func (h *Handler) GetAllAppointments(c *gin.Context) {
+	organizationID, ok := getOrganizationID(c)
+	if !ok {
+		return
+	}
 
 	appointments, err := h.service.GetAllAppointments(
 		c.Request.Context(),
+		organizationID,
 	)
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"message": err.Error(),
+			"message": "Failed to get appointments",
+			"error":   err.Error(),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
+		"message": "Appointments retrieved successfully",
 		"data":    appointments,
 	})
 }
 
-// Get Appointment By ID
-func (h *AppointmentHandler) GetAppointmentByID(c *gin.Context) {
+// GET APPOINTMENT BY ID
+func (h *Handler) GetAppointmentByID(c *gin.Context) {
+	organizationID, ok := getOrganizationID(c)
+	if !ok {
+		return
+	}
 
 	id := c.Param("id")
 
 	appointment, err := h.service.GetAppointmentByID(
 		c.Request.Context(),
+		organizationID,
 		id,
 	)
-
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
-			"message": err.Error(),
+			"message": "Appointment not found",
+			"error":   err.Error(),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
+		"message": "Appointment retrieved successfully",
 		"data":    appointment,
 	})
 }
 
-// Update Appointment
-func (h *AppointmentHandler) UpdateAppointment(c *gin.Context) {
+// UPDATE APPOINTMENT
+func (h *Handler) UpdateAppointment(c *gin.Context) {
+	organizationID, ok := getOrganizationID(c)
+	if !ok {
+		return
+	}
 
 	id := c.Param("id")
 
-	var req dto.UpdateAppointmentRequest
+	var req appointmentDTO.UpdateAppointmentRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": err.Error(),
+			"message": "Invalid request body",
+			"error":   err.Error(),
 		})
 		return
 	}
 
 	appointment, err := h.service.UpdateAppointment(
 		c.Request.Context(),
+		organizationID,
 		id,
 		req,
 	)
-
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": err.Error(),
+			"message": "Failed to update appointment",
+			"error":   err.Error(),
 		})
 		return
 	}
@@ -133,20 +205,25 @@ func (h *AppointmentHandler) UpdateAppointment(c *gin.Context) {
 	})
 }
 
-// Delete Appointment
-func (h *AppointmentHandler) DeleteAppointment(c *gin.Context) {
+// DELETE APPOINTMENT
+func (h *Handler) DeleteAppointment(c *gin.Context) {
+	organizationID, ok := getOrganizationID(c)
+	if !ok {
+		return
+	}
 
 	id := c.Param("id")
 
 	err := h.service.DeleteAppointment(
 		c.Request.Context(),
+		organizationID,
 		id,
 	)
-
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": err.Error(),
+			"message": "Failed to delete appointment",
+			"error":   err.Error(),
 		})
 		return
 	}

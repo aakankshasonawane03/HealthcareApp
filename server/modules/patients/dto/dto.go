@@ -2,18 +2,32 @@ package dto
 
 import "time"
 
-// Create Patient Request
+// Create Patient Request (Admin)
 type CreatePatientRequest struct {
-    UserEmail        string    `json:"user_email" binding:"required,email"`
-    FirstName        string    `json:"first_name" binding:"required"`
-    LastName         string    `json:"last_name" binding:"required"`
-    Email            string    `json:"email" binding:"required,email"`
-    Phone            string    `json:"phone" binding:"required"`
-    Gender           string    `json:"gender" binding:"required"`
-    DateOfBirth      time.Time `json:"date_of_birth" binding:"required"`
-    BloodGroup       string    `json:"blood_group" binding:"required"`
-    Address          string    `json:"address" binding:"required"`
-    EmergencyContact string    `json:"emergency_contact" binding:"required"`
+	UserEmail        string    `json:"user_email" binding:"required,email"`
+	FirstName        string    `json:"first_name" binding:"required"`
+	LastName         string    `json:"last_name" binding:"required"`
+	Email            string    `json:"email" binding:"required,email"`
+	Phone            string    `json:"phone" binding:"required"`
+	Gender           string    `json:"gender" binding:"required"`
+	DateOfBirth      time.Time `json:"date_of_birth" binding:"required"`
+	BloodGroup       string    `json:"blood_group" binding:"required"`
+	Address          string    `json:"address" binding:"required"`
+	EmergencyContact string    `json:"emergency_contact" binding:"required"`
+}
+
+// Create My Patient Profile Request
+// UserID comes from the authenticated JWT.
+type CreateMyPatientProfileRequest struct {
+	FirstName        string    `json:"first_name" binding:"required"`
+	LastName         string    `json:"last_name" binding:"required"`
+	Email            string    `json:"email" binding:"required,email"`
+	Phone            string    `json:"phone" binding:"required"`
+	Gender           string    `json:"gender" binding:"required"`
+	DateOfBirth      time.Time `json:"date_of_birth" binding:"required"`
+	BloodGroup       string    `json:"blood_group" binding:"required"`
+	Address          string    `json:"address" binding:"required"`
+	EmergencyContact string    `json:"emergency_contact" binding:"required"`
 }
 
 // Update Patient Request

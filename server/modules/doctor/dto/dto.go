@@ -18,4 +18,4 @@ type UpdateDoctorRequest struct {
 	Experience      int     `json:"experience"`
 	ConsultationFee float64 `json:"consultation_fee"`
 	IsActive        bool    `json:"is_active"`
-}//
+}

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	model "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/model"
+	clinicModel "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/model"
 	clinicService "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/service"
 	orgService "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/organization/service"
 
@@ -29,8 +29,8 @@ func NewClinicController(
 	}
 }
 
-// getAuthenticatedOrganizationID retrieves the authenticated user's organization.
-// The organization ID is derived from the authenticated account, not request data.
+// getAuthenticatedOrganizationID retrieves the organization
+// associated with the authenticated user.
 func (h *ClinicController) getAuthenticatedOrganizationID(
 	c *gin.Context,
 ) (primitive.ObjectID, bool) {
@@ -86,7 +86,8 @@ func (h *ClinicController) CreateClinic(c *gin.Context) {
 		return
 	}
 
-	var clinic model.Clinic
+	var clinic clinicModel.Clinic
+
 	if err := c.ShouldBindJSON(&clinic); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid clinic request body",
@@ -94,7 +95,7 @@ func (h *ClinicController) CreateClinic(c *gin.Context) {
 		return
 	}
 
-	// Always use the authenticated user's organization.
+	// Do not trust organization_id from the request body.
 	clinic.OrganizationID = organizationID
 
 	err := h.service.CreateClinic(
@@ -193,7 +194,8 @@ func (h *ClinicController) UpdateClinic(c *gin.Context) {
 		return
 	}
 
-	var clinic model.Clinic
+	var clinic clinicModel.Clinic
+
 	if err := c.ShouldBindJSON(&clinic); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid clinic request body",

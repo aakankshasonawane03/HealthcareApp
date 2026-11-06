@@ -1,3 +1,4 @@
+
 package handler
 
 import (
@@ -5,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/organization/dto"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/organization/service"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -21,15 +23,9 @@ func NewOrganizationHandler(
 	return &OrganizationHandler{service: s}
 }
 
-type CreateOrganizationRequest struct {
-	Name        string `json:"name" binding:"required"`
-	Description string `json:"description"`
-	Email       string `json:"email"`
-	Phone       string `json:"phone"`
-}
-
+// Create creates an organization for the authenticated Doctor.
 func (h *OrganizationHandler) Create(c *gin.Context) {
-	// This ID comes from the validated JWT middleware.
+	// Get user ID from the validated JWT middleware.
 	userID := strings.TrimSpace(c.GetString("user_id"))
 
 	ownerID, err := primitive.ObjectIDFromHex(userID)
@@ -41,7 +37,8 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	var req CreateOrganizationRequest
+	// Bind and validate the incoming DTO.
+	var req dto.CreateOrganizationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -51,6 +48,7 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Call organization service.
 	org, err := h.service.Create(
 		c.Request.Context(),
 		ownerID,
@@ -62,9 +60,7 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 	if err != nil {
 		status := http.StatusInternalServerError
 
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			status = http.StatusInternalServerError
-		} else if err.Error() == "organization name is required" ||
+		if err.Error() == "organization name is required" ||
 			err.Error() == "you already own an organization" {
 			status = http.StatusBadRequest
 		}
@@ -76,13 +72,15 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Convert model into response DTO.
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Organization created successfully",
-		"data":    org,
+		"data":    dto.ToOrganizationResponse(org),
 	})
 }
 
+// GetMine retrieves the authenticated Doctor's organization.
 func (h *OrganizationHandler) GetMine(c *gin.Context) {
 	userID := strings.TrimSpace(c.GetString("user_id"))
 
@@ -95,6 +93,7 @@ func (h *OrganizationHandler) GetMine(c *gin.Context) {
 		return
 	}
 
+	// Retrieve organization belonging to this Doctor.
 	org, err := h.service.GetMyOrganization(
 		c.Request.Context(),
 		ownerID,
@@ -115,8 +114,9 @@ func (h *OrganizationHandler) GetMine(c *gin.Context) {
 		return
 	}
 
+	// Convert model into response DTO.
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    org,
+		"data":    dto.ToOrganizationResponse(org),
 	})
 }
