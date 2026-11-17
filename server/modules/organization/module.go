@@ -59,17 +59,11 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 	protected.Use(authMiddleware.AuthMiddleware())
 
 	// Only a DOCTOR can create an organization or retrieve their own.
-	protected.POST(
-		"/create",
-		authorization.RequireRoles("DOCTOR"),
-		m.handler.Create,
-	)
-
 	protected.GET(
-		"/me",
-		authorization.RequireRoles("DOCTOR"),
-		m.handler.GetMine,
-	)
+    "/me",
+    authorization.RequireRoles("ORGANIZATION_OWNER"),
+    m.handler.GetMine,
+)
 }
 
 var _ module.Module = (*Module)(nil)

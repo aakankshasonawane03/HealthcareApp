@@ -1,3 +1,4 @@
+
 package repository
 
 import (
@@ -5,36 +6,41 @@ import (
 	"fmt"
 	"time"
 
+	adminModel "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/admin/model"
+	organizationModel "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/organization/model"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-
-	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/admin/model"
 )
 
 type AdminRepository interface {
-	GetDashboard(ctx context.Context) (*model.Dashboard, error)
+	GetDashboard(ctx context.Context) (*adminModel.Dashboard, error)
 
-	GetUsers(ctx context.Context) ([]model.UserSummary, error)
+	GetUsers(ctx context.Context) ([]adminModel.UserSummary, error)
 	UpdateUserStatus(ctx context.Context, id primitive.ObjectID, isActive bool) error
 
-	GetDoctors(ctx context.Context) ([]model.DoctorSummary, error)
-	GetPatients(ctx context.Context) ([]model.PatientSummary, error)
+	GetDoctors(ctx context.Context) ([]adminModel.DoctorSummary, error)
+	GetPatients(ctx context.Context) ([]adminModel.PatientSummary, error)
 
-	GetClinics(ctx context.Context) ([]model.ClinicSummary, error)
-	CreateClinic(ctx context.Context, data bson.M) (*model.ClinicSummary, error)
+	GetClinics(ctx context.Context) ([]adminModel.ClinicSummary, error)
+	CreateClinic(ctx context.Context, data bson.M) (*adminModel.ClinicSummary, error)
 	UpdateClinic(ctx context.Context, id primitive.ObjectID, data bson.M) error
 	DeleteClinic(ctx context.Context, id primitive.ObjectID) error
 
-	GetAppointments(ctx context.Context) ([]model.AppointmentSummary, error)
+	GetAppointments(ctx context.Context) ([]adminModel.AppointmentSummary, error)
+
+	// Organization
+	CreateOrganization(ctx context.Context, org *organizationModel.Organization) error
 }
 
 type repository struct {
-	users        *mongo.Collection
-	doctors      *mongo.Collection
-	patients     *mongo.Collection
-	clinics      *mongo.Collection
-	appointments *mongo.Collection
+	users         *mongo.Collection
+	doctors       *mongo.Collection
+	patients      *mongo.Collection
+	clinics       *mongo.Collection
+	appointments  *mongo.Collection
+	organizations *mongo.Collection
 }
 
 func NewAdminRepository(
@@ -43,28 +49,30 @@ func NewAdminRepository(
 	patients *mongo.Collection,
 	clinics *mongo.Collection,
 	appointments *mongo.Collection,
+	organizations *mongo.Collection,
 ) AdminRepository {
 	return &repository{
-		users:        users,
-		doctors:      doctors,
-		patients:     patients,
-		clinics:      clinics,
-		appointments: appointments,
+		users:         users,
+		doctors:       doctors,
+		patients:      patients,
+		clinics:       clinics,
+		appointments:  appointments,
+		organizations: organizations,
 	}
 }
+
+// ================= DASHBOARD =================
+
 func (r *repository) GetDashboard(
 	ctx context.Context,
-) (*model.Dashboard, error) {
+) (*adminModel.Dashboard, error) {
 
 	totalUsers, err := r.users.CountDocuments(ctx, bson.M{})
 	if err != nil {
 		return nil, err
 	}
 
-	activeUsers, err := r.users.CountDocuments(
-		ctx,
-		bson.M{"is_active": true},
-	)
+	activeUsers, err := r.users.CountDocuments(ctx, bson.M{"is_active": true})
 	if err != nil {
 		return nil, err
 	}
@@ -74,10 +82,7 @@ func (r *repository) GetDashboard(
 		return nil, err
 	}
 
-	activeDoctors, err := r.doctors.CountDocuments(
-		ctx,
-		bson.M{"is_active": true},
-	)
+	activeDoctors, err := r.doctors.CountDocuments(ctx, bson.M{"is_active": true})
 	if err != nil {
 		return nil, err
 	}
@@ -87,10 +92,7 @@ func (r *repository) GetDashboard(
 		return nil, err
 	}
 
-	activePatients, err := r.patients.CountDocuments(
-		ctx,
-		bson.M{"is_active": true},
-	)
+	activePatients, err := r.patients.CountDocuments(ctx, bson.M{"is_active": true})
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +123,7 @@ func (r *repository) GetDashboard(
 		return nil, err
 	}
 
-	return &model.Dashboard{
+	return &adminModel.Dashboard{
 		TotalUsers:            totalUsers,
 		ActiveUsers:           activeUsers,
 		TotalDoctors:          totalDoctors,
@@ -134,23 +136,22 @@ func (r *repository) GetDashboard(
 		CompletedAppointments: completedAppointments,
 	}, nil
 }
+
+// ================= USERS =================
+
 func (r *repository) GetUsers(
 	ctx context.Context,
-) ([]model.UserSummary, error) {
+) ([]adminModel.UserSummary, error) {
 
-	cursor, err := r.users.Find(
-		ctx,
-		bson.M{},
-	)
+	cursor, err := r.users.Find(ctx, bson.M{})
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(ctx)
 
-	var users []model.UserSummary
+	var users []adminModel.UserSummary
 
 	for cursor.Next(ctx) {
-
 		var data struct {
 			ID        primitive.ObjectID `bson:"_id"`
 			Name      string             `bson:"name"`
@@ -164,7 +165,7 @@ func (r *repository) GetUsers(
 			return nil, err
 		}
 
-		users = append(users, model.UserSummary{
+		users = append(users, adminModel.UserSummary{
 			ID:        data.ID.Hex(),
 			Name:      data.Name,
 			Email:     data.Email,
@@ -180,6 +181,7 @@ func (r *repository) GetUsers(
 
 	return users, nil
 }
+
 func (r *repository) UpdateUserStatus(
 	ctx context.Context,
 	id primitive.ObjectID,
@@ -207,9 +209,12 @@ func (r *repository) UpdateUserStatus(
 
 	return nil
 }
+
+// ================= DOCTORS =================
+
 func (r *repository) GetDoctors(
 	ctx context.Context,
-) ([]model.DoctorSummary, error) {
+) ([]adminModel.DoctorSummary, error) {
 
 	cursor, err := r.doctors.Find(ctx, bson.M{})
 	if err != nil {
@@ -217,10 +222,9 @@ func (r *repository) GetDoctors(
 	}
 	defer cursor.Close(ctx)
 
-	var doctors []model.DoctorSummary
+	var doctors []adminModel.DoctorSummary
 
 	for cursor.Next(ctx) {
-
 		var data struct {
 			ID        primitive.ObjectID `bson:"_id"`
 			Name      string             `bson:"name"`
@@ -233,7 +237,7 @@ func (r *repository) GetDoctors(
 			return nil, err
 		}
 
-		doctors = append(doctors, model.DoctorSummary{
+		doctors = append(doctors, adminModel.DoctorSummary{
 			ID:        data.ID.Hex(),
 			Name:      data.Name,
 			Email:     data.Email,
@@ -244,9 +248,12 @@ func (r *repository) GetDoctors(
 
 	return doctors, cursor.Err()
 }
+
+// ================= PATIENTS =================
+
 func (r *repository) GetPatients(
 	ctx context.Context,
-) ([]model.PatientSummary, error) {
+) ([]adminModel.PatientSummary, error) {
 
 	cursor, err := r.patients.Find(ctx, bson.M{})
 	if err != nil {
@@ -254,10 +261,9 @@ func (r *repository) GetPatients(
 	}
 	defer cursor.Close(ctx)
 
-	var patients []model.PatientSummary
+	var patients []adminModel.PatientSummary
 
 	for cursor.Next(ctx) {
-
 		var data struct {
 			ID       primitive.ObjectID `bson:"_id"`
 			Name     string             `bson:"name"`
@@ -269,7 +275,7 @@ func (r *repository) GetPatients(
 			return nil, err
 		}
 
-		patients = append(patients, model.PatientSummary{
+		patients = append(patients, adminModel.PatientSummary{
 			ID:       data.ID.Hex(),
 			Name:     data.Name,
 			Email:    data.Email,
@@ -279,9 +285,12 @@ func (r *repository) GetPatients(
 
 	return patients, cursor.Err()
 }
+
+// ================= CLINICS =================
+
 func (r *repository) GetClinics(
 	ctx context.Context,
-) ([]model.ClinicSummary, error) {
+) ([]adminModel.ClinicSummary, error) {
 
 	cursor, err := r.clinics.Find(ctx, bson.M{})
 	if err != nil {
@@ -289,10 +298,9 @@ func (r *repository) GetClinics(
 	}
 	defer cursor.Close(ctx)
 
-	var clinics []model.ClinicSummary
+	var clinics []adminModel.ClinicSummary
 
 	for cursor.Next(ctx) {
-
 		var data struct {
 			ID        primitive.ObjectID `bson:"_id"`
 			Name      string             `bson:"name"`
@@ -305,7 +313,7 @@ func (r *repository) GetClinics(
 			return nil, err
 		}
 
-		clinics = append(clinics, model.ClinicSummary{
+		clinics = append(clinics, adminModel.ClinicSummary{
 			ID:        data.ID.Hex(),
 			Name:      data.Name,
 			Address:   data.Address,
@@ -316,56 +324,11 @@ func (r *repository) GetClinics(
 
 	return clinics, cursor.Err()
 }
-func (r *repository) GetAppointments(
-	ctx context.Context,
-) ([]model.AppointmentSummary, error) {
 
-	cursor, err := r.appointments.Find(ctx, bson.M{})
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var appointments []model.AppointmentSummary
-
-	for cursor.Next(ctx) {
-
-		var data struct {
-			ID        primitive.ObjectID `bson:"_id"`
-			DoctorID  primitive.ObjectID `bson:"doctor_id"`
-			PatientID primitive.ObjectID `bson:"patient_id"`
-			Date      string             `bson:"date"`
-			Time      string             `bson:"time"`
-			Status    string             `bson:"status"`
-			Reason    string             `bson:"reason"`
-			CreatedAt time.Time          `bson:"created_at"`
-		}
-
-		if err := cursor.Decode(&data); err != nil {
-			return nil, err
-		}
-
-		appointments = append(
-			appointments,
-			model.AppointmentSummary{
-				ID:        data.ID.Hex(),
-				DoctorID:  data.DoctorID.Hex(),
-				PatientID: data.PatientID.Hex(),
-				Date:      data.Date,
-				Time:      data.Time,
-				Status:    data.Status,
-				Reason:    data.Reason,
-				CreatedAt: data.CreatedAt,
-			},
-		)
-	}
-
-	return appointments, cursor.Err()
-}
 func (r *repository) CreateClinic(
 	ctx context.Context,
 	data bson.M,
-) (*model.ClinicSummary, error) {
+) (*adminModel.ClinicSummary, error) {
 
 	now := time.Now()
 
@@ -382,11 +345,15 @@ func (r *repository) CreateClinic(
 		return nil, fmt.Errorf("invalid inserted clinic ID")
 	}
 
-	return &model.ClinicSummary{
+	name, _ := data["name"].(string)
+	address, _ := data["address"].(string)
+	phone, _ := data["phone"].(string)
+
+	return &adminModel.ClinicSummary{
 		ID:        id.Hex(),
-		Name:      data["name"].(string),
-		Address:   data["address"].(string),
-		Phone:     data["phone"].(string),
+		Name:      name,
+		Address:   address,
+		Phone:     phone,
 		CreatedAt: now,
 	}, nil
 }
@@ -402,9 +369,7 @@ func (r *repository) UpdateClinic(
 	result, err := r.clinics.UpdateOne(
 		ctx,
 		bson.M{"_id": id},
-		bson.M{
-			"$set": data,
-		},
+		bson.M{"$set": data},
 	)
 
 	if err != nil {
@@ -419,22 +384,90 @@ func (r *repository) UpdateClinic(
 }
 
 func (r *repository) DeleteClinic(
-    ctx context.Context,
-    id primitive.ObjectID,
+	ctx context.Context,
+	id primitive.ObjectID,
 ) error {
 
-    result, err := r.clinics.DeleteOne(
-        ctx,
-        bson.M{"_id": id},
-    )
+	result, err := r.clinics.DeleteOne(
+		ctx,
+		bson.M{"_id": id},
+	)
 
-    if err != nil {
-        return err
-    }
+	if err != nil {
+		return err
+	}
 
-    if result.DeletedCount == 0 {
-        return mongo.ErrNoDocuments
-    }
+	if result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
 
-    return nil
+	return nil
+}
+
+// ================= APPOINTMENTS =================
+
+func (r *repository) GetAppointments(
+	ctx context.Context,
+) ([]adminModel.AppointmentSummary, error) {
+
+	cursor, err := r.appointments.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var appointments []adminModel.AppointmentSummary
+
+	for cursor.Next(ctx) {
+		var data struct {
+			ID        primitive.ObjectID `bson:"_id"`
+			DoctorID  primitive.ObjectID `bson:"doctor_id"`
+			PatientID primitive.ObjectID `bson:"patient_id"`
+			Date      string             `bson:"date"`
+			Time      string             `bson:"time"`
+			Status    string             `bson:"status"`
+			Reason    string             `bson:"reason"`
+			CreatedAt time.Time          `bson:"created_at"`
+		}
+
+		if err := cursor.Decode(&data); err != nil {
+			return nil, err
+		}
+
+		appointments = append(appointments, adminModel.AppointmentSummary{
+			ID:        data.ID.Hex(),
+			DoctorID:  data.DoctorID.Hex(),
+			PatientID: data.PatientID.Hex(),
+			Date:      data.Date,
+			Time:      data.Time,
+			Status:    data.Status,
+			Reason:    data.Reason,
+			CreatedAt: data.CreatedAt,
+		})
+	}
+
+	return appointments, cursor.Err()
+}
+
+// ================= ORGANIZATIONS =================
+
+func (r *repository) CreateOrganization(
+	ctx context.Context,
+	org *organizationModel.Organization,
+) error {
+
+	if org == nil {
+		return fmt.Errorf("organization cannot be nil")
+	}
+
+	if org.ID.IsZero() {
+		org.ID = primitive.NewObjectID()
+	}
+
+	if org.OwnerUserID.IsZero() {
+		return fmt.Errorf("organization owner ID is required")
+	}
+
+	_, err := r.organizations.InsertOne(ctx, org)
+	return err
 }

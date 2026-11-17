@@ -28,6 +28,17 @@ type AdminDashboardDTO struct {
 	PendingAppointments   int64 `json:"pending_appointments"`
 	CompletedAppointments int64 `json:"completed_appointments"`
 }
+
+type CreateOrganizationDTO struct {
+	OrganizationName  string `json:"organization_name" binding:"required,min=2,max=150"`
+	Description       string `json:"description"`
+	OrganizationEmail string `json:"organization_email" binding:"required,email"`
+	OrganizationPhone string `json:"organization_phone" binding:"required"`
+
+	OwnerName     string `json:"owner_name" binding:"required,min=2,max=100"`
+	OwnerEmail    string `json:"owner_email" binding:"required,email"`
+	OwnerPassword string `json:"owner_password" binding:"required,min=8"`
+}
 type CreateOrganizationOwnerDTO struct {
 	Name     string `json:"name" binding:"required,min=2,max=100"`
 	Email    string `json:"email" binding:"required,email"`

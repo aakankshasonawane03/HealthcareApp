@@ -14,22 +14,81 @@ type AdminHandler struct {
 	service service.AdminService
 }
 
-func NewAdminHandler(
-	adminService service.AdminService,
-) *AdminHandler {
-
+func NewAdminHandler(adminService service.AdminService) *AdminHandler {
 	return &AdminHandler{
 		service: adminService,
 	}
 }
 
+// CreateOrganization creates an organization and its owner account.
+func (h *AdminHandler) CreateOrganization(c *gin.Context) {
+	var request dto.CreateOrganizationDTO
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request body",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	organization, owner, err := h.service.CreateOrganization(
+		c.Request.Context(),
+		request,
+	)
+	if err != nil {
+		statusCode := http.StatusBadRequest
+
+		if strings.Contains(strings.ToLower(err.Error()), "email already registered") {
+			statusCode = http.StatusConflict
+		}
+
+		c.JSON(statusCode, gin.H{
+			"success": false,
+			"message": "Failed to create organization",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if organization == nil || owner == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Organization creation returned incomplete data",
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "Organization and owner created successfully",
+		"data": gin.H{
+			"organization": gin.H{
+				"id":            organization.ID.Hex(),
+				"name":          organization.Name,
+				"description":   organization.Description,
+				"email":         organization.Email,
+				"phone":         organization.Phone,
+				"owner_user_id": organization.OwnerUserID.Hex(),
+				"is_active":     organization.IsActive,
+				"created_at":    organization.CreatedAt,
+			},
+			"owner": gin.H{
+				"id":         owner.ID.Hex(),
+				"name":       owner.Name,
+				"email":      owner.Email,
+				"role":       owner.Role,
+				"is_active":  owner.IsActive,
+				"created_at": owner.CreatedAt,
+			},
+		},
+	})
+}
+
 // Dashboard returns admin dashboard statistics.
 func (h *AdminHandler) Dashboard(c *gin.Context) {
-
-	data, err := h.service.GetDashboard(
-		c.Request.Context(),
-	)
-
+	data, err := h.service.GetDashboard(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -48,11 +107,7 @@ func (h *AdminHandler) Dashboard(c *gin.Context) {
 
 // GetUsers returns all users.
 func (h *AdminHandler) GetUsers(c *gin.Context) {
-
-	users, err := h.service.GetUsers(
-		c.Request.Context(),
-	)
-
+	users, err := h.service.GetUsers(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -71,7 +126,6 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 
 // UpdateUserStatus activates or deactivates a user.
 func (h *AdminHandler) UpdateUserStatus(c *gin.Context) {
-
 	userID := c.Param("id")
 
 	var request dto.UpdateUserStatusDTO
@@ -85,16 +139,12 @@ func (h *AdminHandler) UpdateUserStatus(c *gin.Context) {
 		return
 	}
 
-	err := h.service.UpdateUserStatus(
+	if err := h.service.UpdateUserStatus(
 		c.Request.Context(),
 		userID,
 		request,
-	)
-
-	if err != nil {
-		statusCode := http.StatusBadRequest
-
-		c.JSON(statusCode, gin.H{
+	); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Failed to update user status",
 			"error":   err.Error(),
@@ -110,11 +160,7 @@ func (h *AdminHandler) UpdateUserStatus(c *gin.Context) {
 
 // GetDoctors returns all doctors.
 func (h *AdminHandler) GetDoctors(c *gin.Context) {
-
-	doctors, err := h.service.GetDoctors(
-		c.Request.Context(),
-	)
-
+	doctors, err := h.service.GetDoctors(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -133,11 +179,7 @@ func (h *AdminHandler) GetDoctors(c *gin.Context) {
 
 // GetPatients returns all patients.
 func (h *AdminHandler) GetPatients(c *gin.Context) {
-
-	patients, err := h.service.GetPatients(
-		c.Request.Context(),
-	)
-
+	patients, err := h.service.GetPatients(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -156,11 +198,7 @@ func (h *AdminHandler) GetPatients(c *gin.Context) {
 
 // GetClinics returns all clinics.
 func (h *AdminHandler) GetClinics(c *gin.Context) {
-
-	clinics, err := h.service.GetClinics(
-		c.Request.Context(),
-	)
-
+	clinics, err := h.service.GetClinics(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -179,7 +217,6 @@ func (h *AdminHandler) GetClinics(c *gin.Context) {
 
 // CreateClinic creates a new clinic.
 func (h *AdminHandler) CreateClinic(c *gin.Context) {
-
 	var request dto.CreateClinicDTO
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -195,7 +232,6 @@ func (h *AdminHandler) CreateClinic(c *gin.Context) {
 		c.Request.Context(),
 		request,
 	)
-
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -214,7 +250,6 @@ func (h *AdminHandler) CreateClinic(c *gin.Context) {
 
 // UpdateClinic updates a clinic.
 func (h *AdminHandler) UpdateClinic(c *gin.Context) {
-
 	clinicID := c.Param("id")
 
 	var request dto.UpdateClinicDTO
@@ -228,13 +263,11 @@ func (h *AdminHandler) UpdateClinic(c *gin.Context) {
 		return
 	}
 
-	err := h.service.UpdateClinic(
+	if err := h.service.UpdateClinic(
 		c.Request.Context(),
 		clinicID,
 		request,
-	)
-
-	if err != nil {
+	); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Failed to update clinic",
@@ -251,15 +284,12 @@ func (h *AdminHandler) UpdateClinic(c *gin.Context) {
 
 // DeleteClinic deletes a clinic.
 func (h *AdminHandler) DeleteClinic(c *gin.Context) {
-
 	clinicID := c.Param("id")
 
-	err := h.service.DeleteClinic(
+	if err := h.service.DeleteClinic(
 		c.Request.Context(),
 		clinicID,
-	)
-
-	if err != nil {
+	); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Failed to delete clinic",
@@ -276,11 +306,7 @@ func (h *AdminHandler) DeleteClinic(c *gin.Context) {
 
 // GetAppointments returns all appointments.
 func (h *AdminHandler) GetAppointments(c *gin.Context) {
-
-	appointments, err := h.service.GetAppointments(
-		c.Request.Context(),
-	)
-
+	appointments, err := h.service.GetAppointments(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -299,7 +325,6 @@ func (h *AdminHandler) GetAppointments(c *gin.Context) {
 
 // CreateOrganizationOwner creates an Organization Owner account.
 func (h *AdminHandler) CreateOrganizationOwner(c *gin.Context) {
-
 	var request dto.CreateOrganizationOwnerDTO
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -315,7 +340,6 @@ func (h *AdminHandler) CreateOrganizationOwner(c *gin.Context) {
 		c.Request.Context(),
 		request,
 	)
-
 	if err != nil {
 		statusCode := http.StatusBadRequest
 
@@ -331,7 +355,14 @@ func (h *AdminHandler) CreateOrganizationOwner(c *gin.Context) {
 		return
 	}
 
-	// Return safe user details; never return the password.
+	if user == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Owner creation returned incomplete data",
+		})
+		return
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Organization Owner created successfully",
