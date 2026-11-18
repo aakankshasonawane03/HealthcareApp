@@ -8,6 +8,7 @@ import {
     UserRound,
     Users,
 } from "lucide-react-native";
+import { useRouter } from "expo-router";
 import {
     Pressable,
     SafeAreaView,
@@ -20,27 +21,13 @@ import {
 import ReceptionHeader from "./ReceptionHeader";
 
 export default function ReceptionDashboard() {
+    const router = useRouter();
+
     const stats = [
-        {
-            title: "Today's Appointments",
-            value: "24",
-            icon: CalendarDays,
-        },
-        {
-            title: "Waiting Patients",
-            value: "08",
-            icon: Users,
-        },
-        {
-            title: "Doctors Available",
-            value: "06",
-            icon: UserRound,
-        },
-        {
-            title: "Completed Today",
-            value: "16",
-            icon: ClipboardList,
-        },
+        { title: "Today's Appointments", value: "24", icon: CalendarDays },
+        { title: "Waiting Patients", value: "08", icon: Users },
+        { title: "Doctors Available", value: "06", icon: UserRound },
+        { title: "Completed Today", value: "16", icon: ClipboardList },
     ];
 
     const appointments = [
@@ -70,6 +57,10 @@ export default function ReceptionDashboard() {
         },
     ];
 
+    const openAppointments = () => {
+        router.push("/main/appointments" as never);
+    };
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <View style={styles.container}>
@@ -77,14 +68,13 @@ export default function ReceptionDashboard() {
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={styles.scrollContent}
                 >
-                    {/* Header */}
                     <ReceptionHeader
                         name="Receptionist"
                         role="Reception Desk"
                         notificationCount={3}
                     />
 
-                    {/* Welcome Section */}
+                    {/* Welcome */}
                     <View style={styles.welcomeSection}>
                         <View style={styles.welcomeTextContainer}>
                             <Text style={styles.greeting}>
@@ -102,26 +92,15 @@ export default function ReceptionDashboard() {
                         </View>
 
                         <View style={styles.dateCard}>
-                            <CalendarDays
-                                size={18}
-                                color="#CB9E53"
-                            />
-
-                            <Text style={styles.dateText}>
-                                Today
-                            </Text>
-
-                            <Text style={styles.dateValue}>
-                                21 Sep
-                            </Text>
+                            <CalendarDays size={18} color="#2563EB" />
+                            <Text style={styles.dateText}>Today</Text>
+                            <Text style={styles.dateValue}>19 Oct</Text>
                         </View>
                     </View>
 
-                    {/* Stats */}
+                    {/* Overview */}
                     <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>
-                            Overview
-                        </Text>
+                        <Text style={styles.sectionTitle}>Overview</Text>
                     </View>
 
                     <View style={styles.statsGrid}>
@@ -129,15 +108,9 @@ export default function ReceptionDashboard() {
                             const Icon = stat.icon;
 
                             return (
-                                <View
-                                    key={stat.title}
-                                    style={styles.statCard}
-                                >
+                                <View key={stat.title} style={styles.statCard}>
                                     <View style={styles.statIcon}>
-                                        <Icon
-                                            size={19}
-                                            color="#CB9E53"
-                                        />
+                                        <Icon size={20} color="#2563EB" />
                                     </View>
 
                                     <Text style={styles.statValue}>
@@ -157,92 +130,80 @@ export default function ReceptionDashboard() {
 
                     {/* Quick Actions */}
                     <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>
-                            Quick Actions
-                        </Text>
+                        <Text style={styles.sectionTitle}>Quick Actions</Text>
                     </View>
 
                     <View style={styles.quickActions}>
                         <Pressable
+                            onPress={openAppointments}
+                            accessibilityRole="button"
+                            accessibilityLabel="Open appointments"
                             style={({ pressed }) => [
                                 styles.quickAction,
                                 pressed && styles.pressed,
                             ]}
                         >
                             <View style={styles.quickActionIcon}>
-                                <Plus
-                                    size={20}
-                                    color="#0B0B0B"
-                                />
+                                <Plus size={21} color="#2563EB" />
                             </View>
 
                             <View style={styles.quickActionContent}>
                                 <Text style={styles.quickActionTitle}>
                                     New Appointment
                                 </Text>
-
                                 <Text style={styles.quickActionSubtitle}>
                                     Schedule a patient visit
                                 </Text>
                             </View>
 
-                            <ChevronRight
-                                size={18}
-                                color="#777777"
-                            />
+                            <ChevronRight size={19} color="#94A3B8" />
                         </Pressable>
 
                         <Pressable
+                            onPress={() => router.push("/main/patient" as never)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Open patient module"
                             style={({ pressed }) => [
                                 styles.quickAction,
                                 pressed && styles.pressed,
                             ]}
                         >
                             <View style={styles.quickActionIcon}>
-                                <UserRound
-                                    size={19}
-                                    color="#CB9E53"
-                                />
+                                <UserRound size={20} color="#2563EB" />
                             </View>
 
                             <View style={styles.quickActionContent}>
                                 <Text style={styles.quickActionTitle}>
                                     Register Patient
                                 </Text>
-
                                 <Text style={styles.quickActionSubtitle}>
-                                    Add a new patient
+                                    Open patient module
                                 </Text>
                             </View>
 
-                            <ChevronRight
-                                size={18}
-                                color="#777777"
-                            />
+                            <ChevronRight size={19} color="#94A3B8" />
                         </Pressable>
                     </View>
 
-                    {/* Today's Appointments */}
+                    {/* Appointments */}
                     <View style={styles.sectionHeader}>
                         <View>
                             <Text style={styles.sectionTitle}>
                                 Today's Appointments
                             </Text>
-
                             <Text style={styles.sectionSubtitle}>
                                 Upcoming patient appointments
                             </Text>
                         </View>
 
-                        <Pressable style={styles.viewAllButton}>
-                            <Text style={styles.viewAllText}>
-                                View all
-                            </Text>
-
-                            <ChevronRight
-                                size={15}
-                                color="#CB9E53"
-                            />
+                        <Pressable
+                            style={styles.viewAllButton}
+                            onPress={openAppointments}
+                            accessibilityRole="button"
+                            accessibilityLabel="View all appointments"
+                        >
+                            <Text style={styles.viewAllText}>View all</Text>
+                            <ChevronRight size={16} color="#2563EB" />
                         </Pressable>
                     </View>
 
@@ -250,17 +211,16 @@ export default function ReceptionDashboard() {
                         {appointments.map((appointment) => (
                             <Pressable
                                 key={appointment.id}
+                                onPress={openAppointments}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Open appointments for ${appointment.patient}`}
                                 style={({ pressed }) => [
                                     styles.appointmentCard,
                                     pressed && styles.pressed,
                                 ]}
                             >
                                 <View style={styles.timeContainer}>
-                                    <Clock3
-                                        size={15}
-                                        color="#CB9E53"
-                                    />
-
+                                    <Clock3 size={16} color="#2563EB" />
                                     <Text style={styles.timeText}>
                                         {appointment.time}
                                     </Text>
@@ -270,11 +230,9 @@ export default function ReceptionDashboard() {
                                     <Text style={styles.patientName}>
                                         {appointment.patient}
                                     </Text>
-
                                     <Text style={styles.doctorName}>
                                         {appointment.doctor}
                                     </Text>
-
                                     <Text style={styles.appointmentType}>
                                         {appointment.type}
                                     </Text>
@@ -284,8 +242,7 @@ export default function ReceptionDashboard() {
                                     <View
                                         style={[
                                             styles.statusBadge,
-                                            appointment.status ===
-                                                "Waiting"
+                                            appointment.status === "Waiting"
                                                 ? styles.waitingBadge
                                                 : styles.confirmedBadge,
                                         ]}
@@ -293,8 +250,7 @@ export default function ReceptionDashboard() {
                                         <Text
                                             style={[
                                                 styles.statusText,
-                                                appointment.status ===
-                                                    "Waiting"
+                                                appointment.status === "Waiting"
                                                     ? styles.waitingText
                                                     : styles.confirmedText,
                                             ]}
@@ -305,14 +261,13 @@ export default function ReceptionDashboard() {
 
                                     <ChevronRight
                                         size={17}
-                                        color="#666666"
+                                        color="#94A3B8"
                                     />
                                 </View>
                             </Pressable>
                         ))}
                     </View>
 
-                    {/* Bottom spacing */}
                     <View style={styles.bottomSpacing} />
                 </ScrollView>
             </View>
@@ -323,12 +278,12 @@ export default function ReceptionDashboard() {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: "#0B0B0B",
+        backgroundColor: "#F5F7FB",
     },
 
     container: {
         flex: 1,
-        backgroundColor: "#0B0B0B",
+        backgroundColor: "#F5F7FB",
     },
 
     scrollContent: {
@@ -351,20 +306,20 @@ const styles = StyleSheet.create({
     },
 
     greeting: {
-        color: "#8A8A8A",
+        color: "#64748B",
         fontSize: 12,
         marginBottom: 5,
     },
 
     title: {
-        color: "#FFFFFF",
+        color: "#172554",
         fontSize: 23,
         fontWeight: "800",
         letterSpacing: -0.5,
     },
 
     subtitle: {
-        color: "#777777",
+        color: "#64748B",
         fontSize: 11,
         lineHeight: 17,
         marginTop: 7,
@@ -376,19 +331,19 @@ const styles = StyleSheet.create({
         paddingHorizontal: 9,
         borderRadius: 13,
         alignItems: "center",
-        backgroundColor: "#151515",
+        backgroundColor: "#FFFFFF",
         borderWidth: 1,
-        borderColor: "#292929",
+        borderColor: "#E2E8F0",
     },
 
     dateText: {
-        color: "#888888",
+        color: "#64748B",
         fontSize: 9,
         marginTop: 4,
     },
 
     dateValue: {
-        color: "#FFFFFF",
+        color: "#172554",
         fontSize: 11,
         fontWeight: "700",
         marginTop: 2,
@@ -403,13 +358,13 @@ const styles = StyleSheet.create({
     },
 
     sectionTitle: {
-        color: "#FFFFFF",
+        color: "#172554",
         fontSize: 16,
         fontWeight: "700",
     },
 
     sectionSubtitle: {
-        color: "#777777",
+        color: "#64748B",
         fontSize: 10,
         marginTop: 3,
     },
@@ -424,12 +379,17 @@ const styles = StyleSheet.create({
     statCard: {
         width: "48.5%",
         minHeight: 125,
-        backgroundColor: "#151515",
+        backgroundColor: "#FFFFFF",
         borderWidth: 1,
-        borderColor: "#292929",
+        borderColor: "#E2E8F0",
         borderRadius: 17,
         padding: 14,
         marginBottom: 10,
+        elevation: 1,
+        shadowColor: "#0F172A",
+        shadowOpacity: 0.03,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
     },
 
     statIcon: {
@@ -438,20 +398,20 @@ const styles = StyleSheet.create({
         borderRadius: 11,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#211D16",
+        backgroundColor: "#EFF6FF",
         borderWidth: 1,
-        borderColor: "#3A3020",
+        borderColor: "#DBEAFE",
         marginBottom: 12,
     },
 
     statValue: {
-        color: "#FFFFFF",
+        color: "#172554",
         fontSize: 23,
         fontWeight: "800",
     },
 
     statTitle: {
-        color: "#777777",
+        color: "#64748B",
         fontSize: 10,
         lineHeight: 14,
         marginTop: 3,
@@ -466,9 +426,9 @@ const styles = StyleSheet.create({
         minHeight: 70,
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: "#151515",
+        backgroundColor: "#FFFFFF",
         borderWidth: 1,
-        borderColor: "#292929",
+        borderColor: "#E2E8F0",
         borderRadius: 16,
         paddingHorizontal: 13,
         paddingVertical: 10,
@@ -480,9 +440,9 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#211D16",
+        backgroundColor: "#EFF6FF",
         borderWidth: 1,
-        borderColor: "#3A3020",
+        borderColor: "#DBEAFE",
     },
 
     quickActionContent: {
@@ -491,13 +451,13 @@ const styles = StyleSheet.create({
     },
 
     quickActionTitle: {
-        color: "#FFFFFF",
+        color: "#172554",
         fontSize: 13,
         fontWeight: "700",
     },
 
     quickActionSubtitle: {
-        color: "#777777",
+        color: "#64748B",
         fontSize: 10,
         marginTop: 3,
     },
@@ -509,7 +469,7 @@ const styles = StyleSheet.create({
     },
 
     viewAllText: {
-        color: "#CB9E53",
+        color: "#2563EB",
         fontSize: 11,
         fontWeight: "600",
     },
@@ -523,10 +483,15 @@ const styles = StyleSheet.create({
         alignItems: "center",
         minHeight: 91,
         padding: 12,
-        backgroundColor: "#151515",
+        backgroundColor: "#FFFFFF",
         borderWidth: 1,
-        borderColor: "#292929",
+        borderColor: "#E2E8F0",
         borderRadius: 16,
+        elevation: 1,
+        shadowColor: "#0F172A",
+        shadowOpacity: 0.03,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
     },
 
     timeContainer: {
@@ -535,11 +500,11 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         paddingRight: 10,
         borderRightWidth: 1,
-        borderRightColor: "#292929",
+        borderRightColor: "#E2E8F0",
     },
 
     timeText: {
-        color: "#D2D2D2",
+        color: "#475569",
         fontSize: 10,
         fontWeight: "600",
         marginTop: 6,
@@ -553,19 +518,19 @@ const styles = StyleSheet.create({
     },
 
     patientName: {
-        color: "#FFFFFF",
+        color: "#172554",
         fontSize: 13,
         fontWeight: "700",
     },
 
     doctorName: {
-        color: "#CB9E53",
+        color: "#2563EB",
         fontSize: 10,
         marginTop: 4,
     },
 
     appointmentType: {
-        color: "#777777",
+        color: "#64748B",
         fontSize: 9,
         marginTop: 4,
     },
@@ -584,13 +549,13 @@ const styles = StyleSheet.create({
     },
 
     confirmedBadge: {
-        backgroundColor: "#142019",
-        borderColor: "#294C35",
+        backgroundColor: "#ECFDF5",
+        borderColor: "#A7F3D0",
     },
 
     waitingBadge: {
-        backgroundColor: "#211D16",
-        borderColor: "#4A3B22",
+        backgroundColor: "#FFF7ED",
+        borderColor: "#FED7AA",
     },
 
     statusText: {
@@ -599,11 +564,11 @@ const styles = StyleSheet.create({
     },
 
     confirmedText: {
-        color: "#5CCB78",
+        color: "#15803D",
     },
 
     waitingText: {
-        color: "#CB9E53",
+        color: "#C2410C",
     },
 
     pressed: {

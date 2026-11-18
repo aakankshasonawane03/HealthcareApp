@@ -1,35 +1,48 @@
 
+import React, { useMemo, useState } from "react";
 import {
     Bell,
     CalendarDays,
     ChevronRight,
     ClipboardList,
-    Clock3,
     MapPin,
-    Search,
     Users,
-    Video,
 } from "lucide-react-native";
-import React from "react";
-import { useGetAllDoctorsQuery } from "../../../redux/slices/doctorApiSlice";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+    ActivityIndicator,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from "react-native";
+
+import { apiSlice } from "../../../redux/slices/apiSlice";
 import DoctorBottomNavbar from "./DoctorBottomNavbar";
 
+interface Branch {
+    _id?: string;
+    id?: string;
+    name?: string;
+    Name?: string;
+    address?: string;
+    Address?: string;
+    city?: string;
+    City?: string;
+    is_active?: boolean;
+}
+
 interface Appointment {
-    id: number;
+    id: number | string;
     patientName: string;
     age: number;
     gender: string;
     time: string;
     type: string;
-    status: "Confirmed" | "Pending";
+    status: "Confirmed" | "Pending" | "Completed" | "Cancelled";
     mode: "Online" | "Clinic";
+    branchId?: string;
 }
 
 interface DoctorDashboardProps {
@@ -38,780 +51,624 @@ interface DoctorDashboardProps {
     appointments?: Appointment[];
 }
 
+const branchesApi = apiSlice.injectEndpoints({
+    endpoints: (builder) => ({
+        getDoctorDashboardBranches: builder.query<any, void>({
+            query: () => "/clinics/list",
+        }),
+    }),
+    overrideExisting: false,
+});
+
+const { useGetDoctorDashboardBranchesQuery } = branchesApi;
+
 const defaultAppointments: Appointment[] = [
     {
         id: 1,
-        patientName: "Aarav Sharma",
-        age: 28,
+        patientName: "Rahul Sharma",
+        age: 32,
         gender: "Male",
-        time: "10:00 AM",
+        time: "10:30 AM",
         type: "General Consultation",
         status: "Confirmed",
-        mode: "Online",
+        mode: "Clinic",
     },
     {
         id: 2,
         patientName: "Priya Patil",
-        age: 34,
+        age: 27,
         gender: "Female",
-        time: "11:30 AM",
+        time: "11:00 AM",
         type: "Follow-up",
-        status: "Confirmed",
-        mode: "Clinic",
+        status: "Pending",
+        mode: "Online",
     },
     {
         id: 3,
-        patientName: "Rahul Deshmukh",
-        age: 42,
+        patientName: "Amit Deshmukh",
+        age: 45,
         gender: "Male",
-        time: "01:00 PM",
-        type: "Health Checkup",
-        status: "Pending",
+        time: "12:00 PM",
+        type: "General Consultation",
+        status: "Confirmed",
         mode: "Clinic",
     },
 ];
-<DoctorBottomNavbar />
+
+function getBranches(response: any): Branch[] {
+    if (Array.isArray(response)) return response;
+    if (Array.isArray(response?.data)) return response.data;
+    if (Array.isArray(response?.clinics)) return response.clinics;
+    if (Array.isArray(response?.branches)) return response.branches;
+    return [];
+}
+
+function getBranchId(branch: Branch): string {
+    return String(branch._id ?? branch.id ?? "");
+}
 
 export default function DoctorDashboard({
-    doctorName = "Dr. John Smith",
-    specialization = "General Physician",
+    doctorName = "Doctor",
+    specialization = "Medical Specialist",
     appointments = defaultAppointments,
 }: DoctorDashboardProps) {
-    const todayAppointments = appointments.length;
-    const { data: doctors, isLoading, isError } = useGetAllDoctorsQuery();
-    console.log("Doctors Data:", doctors);
+    const router = useRouter();
+    const { tab = "home" } = useLocalSearchParams<{ tab?: string }>();
+
+    const {
+        data: branchData,
+        isLoading: branchesLoading,
+        isError: branchesError,
+        refetch,
+    } = useGetDoctorDashboardBranchesQuery(undefined);
+
+    const branches = useMemo(
+        () => getBranches(branchData),
+        [branchData]
+    );
+
+    const [selectedBranchId, setSelectedBranchId] = useState("");
+
+    const selectedBranch =
+        branches.find((branch) => getBranchId(branch) === selectedBranchId) ??
+        branches[0];
+
+    const branchAppointments = useMemo(() => {
+        if (!selectedBranch) return [];
+
+        return appointments.filter(
+            (appointment) =>
+                appointment.branchId === getBranchId(selectedBranch)
+        );
+    }, [appointments, selectedBranch]);
+
+    const confirmedCount = branchAppointments.filter(
+        (appointment) => appointment.status === "Confirmed"
+    ).length;
+
+    const pendingCount = branchAppointments.filter(
+        (appointment) => appointment.status === "Pending"
+    ).length;
+
+    const openBranchDetails = (branch: Branch) => {
+        const branchId = getBranchId(branch);
+        if (!branchId) return;
+
+        router.push({
+            pathname: "/main/branch-details",
+            params: { branchId },
+        } as any);
+    };
+
+    const goToTab = (
+        nextTab: "home" | "appointments" | "patients" | "records" | "profile"
+    ) => {
+        router.setParams({ tab: nextTab });
+    };
+
     return (
         <View style={styles.container}>
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
             >
-                {/* Header */}
                 <View style={styles.header}>
-                    <View style={styles.headerLeft}>
-                        <View style={styles.avatar}>
-                            <Text style={styles.avatarText}>DR</Text>
-                        </View>
-
-                        <View>
-                            <Text style={styles.welcomeText}>
-                                Good Morning 👋
-                            </Text>
-
-                            <Text style={styles.doctorName}>
-                                {doctorName}
-                            </Text>
-
-                            <Text style={styles.specialization}>
-                                {specialization}
-                            </Text>
-                        </View>
+                    <View style={styles.headerText}>
+                        <Text style={styles.greeting}>Doctor Dashboard</Text>
+                        <Text style={styles.doctorName}>Dr. {doctorName}</Text>
+                        <Text style={styles.specialization}>{specialization}</Text>
                     </View>
 
                     <TouchableOpacity
-                        activeOpacity={0.8}
                         style={styles.notificationButton}
+                        onPress={() => router.push("/main/doctor" as any)}
                     >
-                        <Bell
-                            size={21}
-                            color="#2563EB"
-                        />
-
-                        <View style={styles.notificationDot} />
+                        <Bell size={21} color="#2563EB" />
                     </TouchableOpacity>
                 </View>
 
-                {/* Search */}
-                <View style={styles.searchContainer}>
-                    <Search
-                        size={19}
-                        color="#64748B"
-                    />
+                {tab === "home" ? (
+                    <>
+                        <View style={styles.sectionHeading}>
+                            <View>
+                                <Text style={styles.sectionTitle}>Your Branches</Text>
+                                <Text style={styles.sectionSubtitle}>
+                                    Select a branch to view its dashboard
+                                </Text>
+                            </View>
 
-                    <Text style={styles.searchPlaceholder}>
-                        Search patients, appointments...
-                    </Text>
-                </View>
+                            <TouchableOpacity
+                                onPress={() => router.push("/main/branches" as any)}
+                            >
+                                <Text style={styles.linkText}>Manage</Text>
+                            </TouchableOpacity>
+                        </View>
 
-                {/* Stats */}
-                <View style={styles.statsRow}>
-                    <StatCard
-                        icon={
-                            <CalendarDays
-                                size={21}
-                                color="#2563EB"
-                            />
-                        }
-                        value={String(todayAppointments)}
-                        label="Appointments"
-                    />
+                        {branchesLoading ? (
+                            <View style={styles.loadingBox}>
+                                <ActivityIndicator size="small" color="#2563EB" />
+                                <Text style={styles.mutedText}>Loading branches...</Text>
+                            </View>
+                        ) : branchesError ? (
+                            <View style={styles.messageCard}>
+                                <Text style={styles.messageText}>
+                                    Unable to load branches.
+                                </Text>
+                                <TouchableOpacity onPress={() => refetch()}>
+                                    <Text style={styles.linkText}>Try again</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : branches.length === 0 ? (
+                            <View style={styles.messageCard}>
+                                <MapPin size={26} color="#64748B" />
+                                <Text style={styles.messageTitle}>No branches found</Text>
+                                <Text style={styles.messageText}>
+                                    Add your first clinic branch to get started.
+                                </Text>
+                                <TouchableOpacity
+                                    style={styles.primaryButton}
+                                    onPress={() => router.push("/main/branches" as any)}
+                                >
+                                    <Text style={styles.primaryButtonText}>+ Add Branch</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <>
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.branchList}
+                                >
+                                    {branches.map((branch, index) => {
+                                        const branchId = getBranchId(branch);
+                                        const active =
+                                            getBranchId(selectedBranch ?? {}) === branchId;
 
-                    <StatCard
-                        icon={
-                            <Users
-                                size={21}
-                                color="#16A34A"
-                            />
-                        }
-                        value="124"
-                        label="Total Patients"
-                    />
+                                        return (
+                                            <TouchableOpacity
+                                                key={branchId || `branch-${index}`}
+                                                style={[
+                                                    styles.branchCard,
+                                                    active && styles.branchCardActive,
+                                                ]}
+                                                onPress={() => setSelectedBranchId(branchId)}
+                                            >
+                                                <View
+                                                    style={[
+                                                        styles.branchIcon,
+                                                        active && styles.branchIconActive,
+                                                    ]}
+                                                >
+                                                    <MapPin
+                                                        size={20}
+                                                        color={active ? "#FFFFFF" : "#2563EB"}
+                                                    />
+                                                </View>
 
-                    <StatCard
-                        icon={
-                            <Clock3
-                                size={21}
-                                color="#EA580C"
-                            />
-                        }
-                        value="05"
-                        label="Pending"
-                    />
-                </View>
+                                                <Text
+                                                    numberOfLines={1}
+                                                    style={[
+                                                        styles.branchName,
+                                                        active && styles.branchNameActive,
+                                                    ]}
+                                                >
+                                                    {branch.name ??
+                                                        branch.Name ??
+                                                        `Branch ${index + 1}`}
+                                                </Text>
 
-                {/* Today's Schedule */}
-                <View style={styles.sectionHeader}>
-                    <View>
-                        <Text style={styles.sectionTitle}>
-                            Today's Schedule
+                                                <Text
+                                                    numberOfLines={2}
+                                                    style={[
+                                                        styles.branchAddress,
+                                                        active && styles.branchAddressActive,
+                                                    ]}
+                                                >
+                                                    {branch.city ??
+                                                        branch.City ??
+                                                        branch.address ??
+                                                        branch.Address ??
+                                                        "Clinic location"}
+                                                </Text>
+
+                                                <Text
+                                                    style={[
+                                                        styles.branchSelection,
+                                                        active && styles.branchSelectionActive,
+                                                    ]}
+                                                >
+                                                    {active ? "Selected" : "Select branch"}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
+
+                                {selectedBranch && (
+                                    <TouchableOpacity
+                                        style={styles.detailsButton}
+                                        onPress={() => openBranchDetails(selectedBranch)}
+                                    >
+                                        <Text style={styles.detailsButtonText}>
+                                            View Branch Details
+                                        </Text>
+                                        <ChevronRight size={18} color="#2563EB" />
+                                    </TouchableOpacity>
+                                )}
+                            </>
+                        )}
+
+                        <View style={styles.sectionHeading}>
+                            <View>
+                                <Text style={styles.sectionTitle}>Branch Overview</Text>
+                                <Text style={styles.sectionSubtitle}>
+                                    {selectedBranch
+                                        ? selectedBranch.name ??
+                                        selectedBranch.Name ??
+                                        "Selected branch"
+                                        : "Select a branch to continue"}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.statsGrid}>
+                            <View style={styles.statCard}>
+                                <View
+                                    style={[styles.statIcon, { backgroundColor: "#DBEAFE" }]}
+                                >
+                                    <CalendarDays size={21} color="#2563EB" />
+                                </View>
+                                <Text style={styles.statNumber}>
+                                    {branchAppointments.length}
+                                </Text>
+                                <Text style={styles.statLabel}>Appointments</Text>
+                            </View>
+
+                            <View style={styles.statCard}>
+                                <View
+                                    style={[styles.statIcon, { backgroundColor: "#D1FAE5" }]}
+                                >
+                                    <Users size={21} color="#059669" />
+                                </View>
+                                <Text style={styles.statNumber}>{confirmedCount}</Text>
+                                <Text style={styles.statLabel}>Confirmed</Text>
+                            </View>
+
+                            <View style={styles.statCard}>
+                                <View
+                                    style={[styles.statIcon, { backgroundColor: "#FEF3C7" }]}
+                                >
+                                    <ClipboardList size={21} color="#D97706" />
+                                </View>
+                                <Text style={styles.statNumber}>{pendingCount}</Text>
+                                <Text style={styles.statLabel}>Pending</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.sectionHeading}>
+                            <View>
+                                <Text style={styles.sectionTitle}>Appointments</Text>
+                                <Text style={styles.sectionSubtitle}>
+                                    Appointments linked to the selected branch
+                                </Text>
+                            </View>
+                        </View>
+
+                        {!selectedBranch ? (
+                            <View style={styles.messageCard}>
+                                <Text style={styles.messageText}>
+                                    Add or select a branch to continue.
+                                </Text>
+                            </View>
+                        ) : branchAppointments.length === 0 ? (
+                            <View style={styles.messageCard}>
+                                <CalendarDays size={27} color="#64748B" />
+                                <Text style={styles.messageTitle}>
+                                    No branch-linked appointments
+                                </Text>
+                                <Text style={styles.messageText}>
+                                    Appointments need a matching branchId to appear here.
+                                </Text>
+                            </View>
+                        ) : (
+                            branchAppointments.map((appointment) => (
+                                <View key={appointment.id} style={styles.appointmentCard}>
+                                    <View style={styles.appointmentTop}>
+                                        <View style={styles.patientAvatar}>
+                                            <Users size={20} color="#2563EB" />
+                                        </View>
+
+                                        <View style={styles.patientInfo}>
+                                            <Text style={styles.patientName}>
+                                                {appointment.patientName}
+                                            </Text>
+                                            <Text style={styles.patientMeta}>
+                                                {appointment.age} years · {appointment.gender}
+                                            </Text>
+                                        </View>
+
+                                        <View
+                                            style={[
+                                                styles.statusBadge,
+                                                appointment.status === "Confirmed"
+                                                    ? styles.confirmedBadge
+                                                    : styles.pendingBadge,
+                                            ]}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.statusText,
+                                                    appointment.status === "Confirmed"
+                                                        ? styles.confirmedText
+                                                        : styles.pendingText,
+                                                ]}
+                                            >
+                                                {appointment.status}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.appointmentDivider} />
+                                    <Text style={styles.appointmentType}>
+                                        {appointment.type}
+                                    </Text>
+                                    <Text style={styles.appointmentMeta}>
+                                        {appointment.time} · {appointment.mode}
+                                    </Text>
+                                </View>
+                            ))
+                        )}
+
+                        <TouchableOpacity
+                            style={styles.manageBranchesButton}
+                            onPress={() => router.push("/main/branches" as any)}
+                        >
+                            <MapPin size={19} color="#FFFFFF" />
+                            <Text style={styles.manageBranchesButtonText}>
+                                Branch Management
+                            </Text>
+                            <ChevronRight size={18} color="#FFFFFF" />
+                        </TouchableOpacity>
+                    </>
+                ) : (
+                    <View style={styles.messageCard}>
+                        <Text style={styles.messageTitle}>
+                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
                         </Text>
-
-                        <Text style={styles.sectionSubtitle}>
-                            Your upcoming appointments
+                        <Text style={styles.messageText}>
+                            This tab is selected. Its dedicated screen still needs to be
+                            connected to your existing appointment, patient, records, or
+                            profile components.
                         </Text>
+                        <TouchableOpacity
+                            style={styles.primaryButton}
+                            onPress={() => goToTab("home")}
+                        >
+                            <Text style={styles.primaryButtonText}>Back to Home</Text>
+                        </TouchableOpacity>
                     </View>
-
-                    <TouchableOpacity
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.viewAll}>
-                            View All
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Appointment Cards */}
-                {appointments.map((appointment) => (
-                    <AppointmentCard
-                        key={appointment.id}
-                        appointment={appointment}
-                    />
-                ))}
-
-                {/* Quick Actions */}
-                <View style={styles.sectionHeader}>
-                    <View>
-                        <Text style={styles.sectionTitle}>
-                            Quick Actions
-                        </Text>
-
-                        <Text style={styles.sectionSubtitle}>
-                            Manage your practice
-                        </Text>
-                    </View>
-                </View>
-
-                <View style={styles.actionsGrid}>
-                    <QuickAction
-                        icon={
-                            <Users
-                                size={23}
-                                color="#2563EB"
-                            />
-                        }
-                        title="Patients"
-                        subtitle="View patients"
-                    />
-
-                    <QuickAction
-                        icon={
-                            <CalendarDays
-                                size={23}
-                                color="#16A34A"
-                            />
-                        }
-                        title="Appointments"
-                        subtitle="Manage schedule"
-                    />
-
-                    <QuickAction
-                        icon={
-                            <ClipboardList
-                                size={23}
-                                color="#9333EA"
-                            />
-                        }
-                        title="Prescriptions"
-                        subtitle="Create prescriptions"
-                    />
-
-                    <QuickAction
-                        icon={
-                            <Clock3
-                                size={23}
-                                color="#EA580C"
-                            />
-                        }
-                        title="Availability"
-                        subtitle="Set availability"
-                    />
-                </View>
-
-                {/* Today's Summary */}
-                <View style={styles.summaryCard}>
-                    <View style={styles.summaryIcon}>
-                        <CalendarDays
-                            size={22}
-                            color="#2563EB"
-                        />
-                    </View>
-
-                    <View style={styles.summaryContent}>
-                        <Text style={styles.summaryTitle}>
-                            Today's Summary
-                        </Text>
-
-                        <Text style={styles.summaryText}>
-                            You have {todayAppointments} appointments
-                            scheduled today.
-                        </Text>
-                    </View>
-
-                    <ChevronRight
-                        size={20}
-                        color="#94A3B8"
-                    />
-                </View>
+                )}
             </ScrollView>
+
+            <DoctorBottomNavbar />
         </View>
     );
 }
-
-/* =========================
-   STAT CARD
-========================= */
-
-interface StatCardProps {
-    icon: React.ReactNode;
-    value: string;
-    label: string;
-}
-
-function StatCard({
-    icon,
-    value,
-    label,
-}: StatCardProps) {
-    return (
-        <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-                {icon}
-            </View>
-
-            <Text style={styles.statValue}>
-                {value}
-            </Text>
-
-            <Text style={styles.statLabel}>
-                {label}
-            </Text>
-        </View>
-    );
-}
-
-/* =========================
-   APPOINTMENT CARD
-========================= */
-
-interface AppointmentCardProps {
-    appointment: Appointment;
-}
-
-function AppointmentCard({
-    appointment,
-}: AppointmentCardProps) {
-    return (
-        <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.appointmentCard}
-        >
-            <View style={styles.appointmentTop}>
-                <View style={styles.patientAvatar}>
-                    <Text style={styles.patientAvatarText}>
-                        {appointment.patientName
-                            .split(" ")
-                            .map((name) => name[0])
-                            .join("")
-                            .slice(0, 2)}
-                    </Text>
-                </View>
-
-                <View style={styles.patientInfo}>
-                    <Text style={styles.patientName}>
-                        {appointment.patientName}
-                    </Text>
-
-                    <Text style={styles.patientDetails}>
-                        {appointment.age} years •{" "}
-                        {appointment.gender}
-                    </Text>
-                </View>
-
-                <View
-                    style={[
-                        styles.statusBadge,
-                        appointment.status === "Confirmed"
-                            ? styles.confirmedBadge
-                            : styles.pendingBadge,
-                    ]}
-                >
-                    <Text
-                        style={[
-                            styles.statusText,
-                            appointment.status === "Confirmed"
-                                ? styles.confirmedText
-                                : styles.pendingText,
-                        ]}
-                    >
-                        {appointment.status}
-                    </Text>
-                </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.appointmentBottom}>
-                <View style={styles.appointmentMeta}>
-                    <Clock3
-                        size={16}
-                        color="#2563EB"
-                    />
-
-                    <Text style={styles.metaText}>
-                        {appointment.time}
-                    </Text>
-                </View>
-
-                <View style={styles.appointmentMeta}>
-                    {appointment.mode === "Online" ? (
-                        <Video
-                            size={16}
-                            color="#2563EB"
-                        />
-                    ) : (
-                        <MapPin
-                            size={16}
-                            color="#2563EB"
-                        />
-                    )}
-
-                    <Text style={styles.metaText}>
-                        {appointment.mode}
-                    </Text>
-                </View>
-            </View>
-
-            <Text style={styles.appointmentType}>
-                {appointment.type}
-            </Text>
-        </TouchableOpacity>
-    );
-}
-
-/* =========================
-   QUICK ACTION
-========================= */
-
-interface QuickActionProps {
-    icon: React.ReactNode;
-    title: string;
-    subtitle: string;
-}
-
-function QuickAction({
-    icon,
-    title,
-    subtitle,
-}: QuickActionProps) {
-    return (
-        <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.actionCard}
-        >
-            <View style={styles.actionIcon}>
-                {icon}
-            </View>
-
-            <Text style={styles.actionTitle}>
-                {title}
-            </Text>
-
-            <Text style={styles.actionSubtitle}>
-                {subtitle}
-            </Text>
-
-            <ChevronRight
-                size={17}
-                color="#94A3B8"
-                style={styles.actionArrow}
-            />
-        </TouchableOpacity>
-    );
-}
-
-/* =========================
-   STYLES
-========================= */
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#F8FAFC",
+        backgroundColor: "#F5F7FB",
     },
-
     scrollContent: {
-        padding: 20,
-        paddingBottom: 40,
+        padding: 18,
+        paddingBottom: 28,
     },
-
     header: {
         flexDirection: "row",
-        alignItems: "center",
         justifyContent: "space-between",
-        marginBottom: 22,
-    },
-
-    headerLeft: {
-        flexDirection: "row",
         alignItems: "center",
+        marginBottom: 26,
     },
-
-    avatar: {
-        width: 52,
-        height: 52,
-        borderRadius: 26,
-        backgroundColor: "#EFF6FF",
-        borderWidth: 1,
-        borderColor: "#BFDBFE",
-        alignItems: "center",
-        justifyContent: "center",
-        marginRight: 12,
-    },
-
-    avatarText: {
-        color: "#2563EB",
-        fontSize: 15,
-        fontWeight: "700",
-    },
-
-    welcomeText: {
-        color: "#64748B",
-        fontSize: 12,
-        marginBottom: 3,
-    },
-
-    doctorName: {
-        color: "#0F172A",
-        fontSize: 19,
-        fontWeight: "700",
-    },
-
-    specialization: {
-        color: "#2563EB",
-        fontSize: 12,
-        marginTop: 2,
-    },
-
+    headerText: { flex: 1 },
+    greeting: { fontSize: 13, color: "#64748B", marginBottom: 5 },
+    doctorName: { fontSize: 25, fontWeight: "700", color: "#0F172A" },
+    specialization: { fontSize: 14, color: "#64748B", marginTop: 4 },
     notificationButton: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
+        height: 44,
+        width: 44,
+        borderRadius: 14,
         backgroundColor: "#FFFFFF",
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
         alignItems: "center",
         justifyContent: "center",
+        elevation: 2,
     },
-
-    notificationDot: {
-        position: "absolute",
-        top: 8,
-        right: 8,
-        width: 7,
-        height: 7,
-        borderRadius: 4,
-        backgroundColor: "#2563EB",
-        borderWidth: 1,
-        borderColor: "#FFFFFF",
-    },
-
-    searchContainer: {
-        height: 48,
-        borderRadius: 13,
-        backgroundColor: "#FFFFFF",
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: 15,
-        marginBottom: 18,
-    },
-
-    searchPlaceholder: {
-        color: "#64748B",
-        fontSize: 13,
-        marginLeft: 10,
-    },
-
-    statsRow: {
-        flexDirection: "row",
-        gap: 10,
-        marginBottom: 28,
-    },
-
-    statCard: {
-        flex: 1,
-        backgroundColor: "#FFFFFF",
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-        borderRadius: 15,
-        padding: 13,
-        minHeight: 112,
-    },
-
-    statIcon: {
-        width: 38,
-        height: 38,
-        borderRadius: 11,
-        backgroundColor: "#F1F5F9",
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: 10,
-    },
-
-    statValue: {
-        color: "#0F172A",
-        fontSize: 20,
-        fontWeight: "700",
-    },
-
-    statLabel: {
-        color: "#64748B",
-        fontSize: 10,
-        marginTop: 3,
-    },
-
-    sectionHeader: {
+    sectionHeading: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         marginBottom: 13,
+        marginTop: 5,
     },
-
-    sectionTitle: {
-        color: "#0F172A",
-        fontSize: 18,
-        fontWeight: "700",
-    },
-
-    sectionSubtitle: {
-        color: "#64748B",
-        fontSize: 11,
-        marginTop: 3,
-    },
-
-    viewAll: {
-        color: "#2563EB",
-        fontSize: 12,
-        fontWeight: "600",
-    },
-
-    appointmentCard: {
+    sectionTitle: { fontSize: 18, fontWeight: "700", color: "#0F172A" },
+    sectionSubtitle: { fontSize: 12, color: "#64748B", marginTop: 4 },
+    linkText: { fontSize: 13, fontWeight: "700", color: "#2563EB" },
+    branchList: { gap: 12, paddingBottom: 5 },
+    branchCard: {
+        width: 178,
+        padding: 14,
+        borderRadius: 17,
         backgroundColor: "#FFFFFF",
         borderWidth: 1,
         borderColor: "#E2E8F0",
-        borderRadius: 16,
-        padding: 15,
-        marginBottom: 12,
     },
-
-    appointmentTop: {
-        flexDirection: "row",
-        alignItems: "center",
+    branchCardActive: {
+        backgroundColor: "#EFF6FF",
+        borderColor: "#2563EB",
+        borderWidth: 2,
     },
-
-    patientAvatar: {
-        width: 43,
-        height: 43,
-        borderRadius: 22,
-        backgroundColor: "#F1F5F9",
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
+    branchIcon: {
+        height: 40,
+        width: 40,
+        borderRadius: 12,
+        backgroundColor: "#DBEAFE",
         alignItems: "center",
         justifyContent: "center",
-        marginRight: 11,
+        marginBottom: 12,
     },
-
-    patientAvatarText: {
-        color: "#2563EB",
-        fontSize: 13,
-        fontWeight: "700",
-    },
-
-    patientInfo: {
-        flex: 1,
-    },
-
-    patientName: {
-        color: "#0F172A",
-        fontSize: 14,
-        fontWeight: "600",
-    },
-
-    patientDetails: {
+    branchIconActive: { backgroundColor: "#2563EB" },
+    branchName: { color: "#0F172A", fontWeight: "700", fontSize: 15 },
+    branchNameActive: { color: "#1D4ED8" },
+    branchAddress: {
         color: "#64748B",
-        fontSize: 11,
-        marginTop: 4,
+        fontSize: 12,
+        marginTop: 6,
+        minHeight: 32,
     },
-
+    branchAddressActive: { color: "#1E40AF" },
+    branchSelection: {
+        color: "#64748B",
+        fontWeight: "600",
+        fontSize: 11,
+        marginTop: 12,
+    },
+    branchSelectionActive: { color: "#2563EB" },
+    detailsButton: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        backgroundColor: "#FFFFFF",
+        borderRadius: 12,
+        padding: 14,
+        marginTop: 10,
+        marginBottom: 22,
+    },
+    detailsButtonText: { color: "#2563EB", fontWeight: "700", fontSize: 13 },
+    loadingBox: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 14,
+        padding: 20,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        marginBottom: 22,
+    },
+    mutedText: { color: "#64748B", fontSize: 13 },
+    messageCard: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 16,
+        padding: 20,
+        alignItems: "center",
+        marginBottom: 22,
+        gap: 8,
+    },
+    messageTitle: {
+        color: "#0F172A",
+        fontSize: 15,
+        fontWeight: "700",
+        textAlign: "center",
+    },
+    messageText: {
+        color: "#64748B",
+        fontSize: 13,
+        lineHeight: 19,
+        textAlign: "center",
+    },
+    primaryButton: {
+        backgroundColor: "#2563EB",
+        borderRadius: 10,
+        paddingHorizontal: 18,
+        paddingVertical: 11,
+        marginTop: 7,
+    },
+    primaryButtonText: { color: "#FFFFFF", fontWeight: "700" },
+    statsGrid: { flexDirection: "row", gap: 10, marginBottom: 25 },
+    statCard: {
+        flex: 1,
+        backgroundColor: "#FFFFFF",
+        borderRadius: 15,
+        padding: 13,
+        minHeight: 130,
+    },
+    statIcon: {
+        height: 38,
+        width: 38,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 12,
+    },
+    statNumber: { fontSize: 23, fontWeight: "700", color: "#0F172A" },
+    statLabel: { fontSize: 11, color: "#64748B", marginTop: 4 },
+    appointmentCard: {
+        backgroundColor: "#FFFFFF",
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 12,
+    },
+    appointmentTop: { flexDirection: "row", alignItems: "center" },
+    patientAvatar: {
+        width: 42,
+        height: 42,
+        borderRadius: 14,
+        backgroundColor: "#DBEAFE",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    patientInfo: { flex: 1, marginLeft: 11 },
+    patientName: { fontSize: 14, fontWeight: "700", color: "#0F172A" },
+    patientMeta: { fontSize: 12, color: "#64748B", marginTop: 4 },
     statusBadge: {
         paddingHorizontal: 9,
-        paddingVertical: 5,
-        borderRadius: 8,
+        paddingVertical: 6,
+        borderRadius: 20,
     },
-
-    confirmedBadge: {
-        backgroundColor: "#F0FDF4",
-        borderWidth: 1,
-        borderColor: "#BBF7D0",
-    },
-
-    pendingBadge: {
-        backgroundColor: "#FFF7ED",
-        borderWidth: 1,
-        borderColor: "#FED7AA",
-    },
-
-    statusText: {
-        fontSize: 9,
-        fontWeight: "600",
-    },
-
-    confirmedText: {
-        color: "#16A34A",
-    },
-
-    pendingText: {
-        color: "#EA580C",
-    },
-
-    divider: {
+    confirmedBadge: { backgroundColor: "#D1FAE5" },
+    pendingBadge: { backgroundColor: "#FEF3C7" },
+    statusText: { fontSize: 10, fontWeight: "700" },
+    confirmedText: { color: "#047857" },
+    pendingText: { color: "#B45309" },
+    appointmentDivider: {
         height: 1,
         backgroundColor: "#E2E8F0",
         marginVertical: 13,
     },
-
-    appointmentBottom: {
-        flexDirection: "row",
-        gap: 20,
-    },
-
-    appointmentMeta: {
+    appointmentType: { color: "#334155", fontSize: 13, fontWeight: "600" },
+    appointmentMeta: { color: "#64748B", fontSize: 12, marginTop: 6 },
+    manageBranchesButton: {
+        backgroundColor: "#2563EB",
         flexDirection: "row",
         alignItems: "center",
+        justifyContent: "space-between",
+        padding: 16,
+        borderRadius: 14,
+        marginTop: 12,
     },
-
-    metaText: {
-        color: "#475569",
-        fontSize: 11,
-        marginLeft: 6,
-    },
-
-    appointmentType: {
-        color: "#64748B",
-        fontSize: 11,
-        marginTop: 9,
-    },
-
-    actionsGrid: {
-        flexDirection: "row",
-        flexWrap: "wrap",
-        gap: 10,
-        marginBottom: 20,
-    },
-
-    actionCard: {
-        width: "48%",
-        minHeight: 125,
-        backgroundColor: "#FFFFFF",
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-        borderRadius: 15,
-        padding: 14,
-        position: "relative",
-    },
-
-    actionIcon: {
-        width: 42,
-        height: 42,
-        borderRadius: 12,
-        backgroundColor: "#F1F5F9",
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: 12,
-    },
-
-    actionTitle: {
-        color: "#0F172A",
-        fontSize: 13,
-        fontWeight: "600",
-    },
-
-    actionSubtitle: {
-        color: "#64748B",
-        fontSize: 10,
-        marginTop: 4,
-    },
-
-    actionArrow: {
-        position: "absolute",
-        right: 12,
-        top: 16,
-    },
-
-    summaryCard: {
-        backgroundColor: "#FFFFFF",
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-        borderRadius: 16,
-        padding: 15,
-        flexDirection: "row",
-        alignItems: "center",
-    },
-
-    summaryIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        backgroundColor: "#F1F5F9",
-        alignItems: "center",
-        justifyContent: "center",
-        marginRight: 12,
-    },
-
-    summaryContent: {
+    manageBranchesButtonText: {
+        color: "#FFFFFF",
+        fontSize: 14,
+        fontWeight: "700",
         flex: 1,
-    },
-
-    summaryTitle: {
-        color: "#0F172A",
-        fontSize: 13,
-        fontWeight: "600",
-    },
-
-    summaryText: {
-        color: "#64748B",
-        fontSize: 10,
-        marginTop: 4,
+        marginLeft: 10,
     },
 });

@@ -1,14 +1,12 @@
 
-
-
-
 root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -o ./tmp/main.exe ./cmd/server/main.go"
-  bin = "tmp/main.exe"
+  cmd = "go build -o ./tmp/main ./cmd/server"
+  entrypoint = "./tmp/main"
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  exclude_dir = ["tmp", "vendor"]
 
 [log]
   time = true
-

@@ -21,6 +21,14 @@ type Clinic struct {
 	OpeningTime string `bson:"opening_time" json:"opening_time"`
 	ClosingTime string `bson:"closing_time" json:"closing_time"`
 
+	// Actual clinic coordinates for nearby search.
+	// Pointers allow existing records to have no coordinates.
+	Latitude  *float64 `bson:"latitude,omitempty" json:"latitude,omitempty"`
+	Longitude *float64 `bson:"longitude,omitempty" json:"longitude,omitempty"`
+
+	// Calculated at search time; never stored in MongoDB.
+	DistanceKm float64 `bson:"-" json:"distance_km,omitempty"`
+
 	IsActive bool `bson:"is_active" json:"is_active"`
 
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`

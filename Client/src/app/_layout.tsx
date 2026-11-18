@@ -1,22 +1,3 @@
-// import { Stack } from "expo-router";
-// import { StatusBar } from "expo-status-bar";
-
-// export default function RootLayout() {
-//   return (
-//     <>
-//       <StatusBar style="dark" />
-//       <Stack
-//         screenOptions={{
-//           headerShown: false,
-//         }}
-//       />
-//     </>
-//   );
-// }
-
-
-
-
 import "react-native-gesture-handler";
 
 
@@ -152,4 +133,4 @@ export default function RootLayout() {
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
-}
+}//

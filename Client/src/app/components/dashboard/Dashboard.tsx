@@ -12,11 +12,11 @@ import {
   Text,
   View
 } from "react-native";
-import {
-  BarChart,
-  LineChart,
-} from "react-native-chart-kit";
 
+import {
+  WeeklyAppointmentsChart,
+  PatientGrowthChart,
+} from "./DashboardCharts";
 import BottomNavbar from "../ui/BottomNavbar";
 
 export default function Dashboard() {
@@ -84,11 +84,16 @@ export default function Dashboard() {
               </Text>
             </View>
 
-            <View style={styles.profileCircle}>
+            <Pressable
+              style={styles.profileCircle}
+              onPress={() => router.push("/main/profile")}
+              accessibilityRole="button"
+              accessibilityLabel="Open your profile"
+            >
               <Text style={styles.profileText}>
                 A
               </Text>
-            </View>
+            </Pressable>
 
           </View>
 
@@ -237,65 +242,7 @@ export default function Dashboard() {
 
             </View>
 
-            <BarChart
-              data={{
-                labels: [
-                  "Mon",
-                  "Tue",
-                  "Wed",
-                  "Thu",
-                  "Fri",
-                  "Sat",
-                  "Sun",
-                ],
-                datasets: [
-                  {
-                    data: [
-                      42,
-                      55,
-                      38,
-                      68,
-                      74,
-                      51,
-                      63,
-                    ],
-                  },
-                ],
-              }}
-              width={chartWidth}
-              height={250}
-              yAxisLabel=""
-              yAxisSuffix=""
-              fromZero
-              showValuesOnTopOfBars
-              withInnerLines
-              chartConfig={{
-                backgroundColor: "#FFFFFF",
-                backgroundGradientFrom: "#FFFFFF",
-                backgroundGradientTo: "#FFFFFF",
-
-                decimalPlaces: 0,
-
-                color: (opacity = 1) =>
-                  `rgba(37, 99, 235, ${opacity})`,
-
-                labelColor: (opacity = 1) =>
-                  `rgba(100, 116, 139, ${opacity})`,
-
-                propsForBackgroundLines: {
-                  stroke: "#E2E8F0",
-                  strokeDasharray: "",
-                },
-
-                propsForLabels: {
-                  fontSize: 11,
-                },
-
-                barPercentage: 0.55,
-              }}
-              style={styles.chart}
-            />
-
+            <WeeklyAppointmentsChart width={chartWidth} />
           </View>
 
           {/* ================================================= */}
@@ -327,68 +274,7 @@ export default function Dashboard() {
 
             </View>
 
-            <LineChart
-              data={{
-                labels: [
-                  "Jan",
-                  "Feb",
-                  "Mar",
-                  "Apr",
-                  "May",
-                  "Jun",
-                ],
-                datasets: [
-                  {
-                    data: [
-                      820,
-                      910,
-                      975,
-                      1080,
-                      1165,
-                      1248,
-                    ],
-                  },
-                ],
-              }}
-              width={chartWidth}
-              height={250}
-              yAxisLabel=""
-              yAxisSuffix=""
-              fromZero
-              bezier
-              withInnerLines
-              withDots
-              chartConfig={{
-                backgroundColor: "#FFFFFF",
-                backgroundGradientFrom: "#FFFFFF",
-                backgroundGradientTo: "#FFFFFF",
-
-                decimalPlaces: 0,
-
-                color: (opacity = 1) =>
-                  `rgba(22, 163, 74, ${opacity})`,
-
-                labelColor: (opacity = 1) =>
-                  `rgba(100, 116, 139, ${opacity})`,
-
-                propsForBackgroundLines: {
-                  stroke: "#E2E8F0",
-                  strokeDasharray: "",
-                },
-
-                propsForLabels: {
-                  fontSize: 11,
-                },
-
-                propsForDots: {
-                  r: "4",
-                  strokeWidth: "2",
-                  stroke: "#FFFFFF",
-                },
-              }}
-              style={styles.chart}
-            />
-
+            <PatientGrowthChart width={chartWidth} />
           </View>
 
           {/* ================================================= */}
@@ -466,14 +352,27 @@ export default function Dashboard() {
           </Pressable>
 
           {/* Appointments */}
-          <Pressable
+          {/* <Pressable
             style={styles.actionCard}
+
+            onPress={() => router.push("/main/reception")}
+            accessibilityRole="button"
+            accessibilityLabel="Open appointments"
+          >
+            <Text style={styles.actionTitle}>
+              Appointments
+            </Text>
+          </Pressable> */}<Pressable
+            style={styles.actionCard}
+            onPress={() =>
+              router.push("/main/appointments")
+            }
           >
 
-            <View style={styles.actionIconPurple}>
-              <CalendarDays
+            <View style={styles.actionIconGreen}>
+              <UserRound
                 size={21}
-                color="#9333EA"
+                color="#a31616"
               />
             </View>
 
@@ -484,7 +383,7 @@ export default function Dashboard() {
               </Text>
 
               <Text style={styles.actionDescription}>
-                Check today's appointments
+                View and manage appointments
               </Text>
 
             </View>
@@ -494,7 +393,6 @@ export default function Dashboard() {
             </Text>
 
           </Pressable>
-
         </ScrollView>
 
       </View>

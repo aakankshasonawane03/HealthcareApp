@@ -34,6 +34,8 @@ export default function ReceptionHeader({
             <View style={styles.leftSection}>
                 <Pressable
                     onPress={onProfilePress}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open profile"
                     style={({ pressed }) => [
                         styles.avatarWrapper,
                         pressed && styles.pressed,
@@ -47,7 +49,10 @@ export default function ReceptionHeader({
                         />
                     ) : (
                         <View style={styles.avatarPlaceholder}>
-                            <UserRound size={23} color="#CB9E53" />
+                            <UserRound
+                                size={23}
+                                color="#2563EB"
+                            />
                         </View>
                     )}
                 </Pressable>
@@ -67,7 +72,7 @@ export default function ReceptionHeader({
 
                         <ChevronDown
                             size={15}
-                            color="#777777"
+                            color="#64748B"
                         />
                     </View>
 
@@ -79,6 +84,8 @@ export default function ReceptionHeader({
 
             <Pressable
                 onPress={onNotificationPress}
+                accessibilityRole="button"
+                accessibilityLabel={`${notificationCount} notifications`}
                 style={({ pressed }) => [
                     styles.notificationButton,
                     pressed && styles.pressed,
@@ -86,7 +93,7 @@ export default function ReceptionHeader({
             >
                 <Bell
                     size={21}
-                    color="#D8D8D8"
+                    color="#2563EB"
                     strokeWidth={1.9}
                 />
 
@@ -112,6 +119,7 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
         paddingHorizontal: 2,
         paddingVertical: 8,
+        backgroundColor: "#F5F7FB",
     },
 
     leftSection: {
@@ -140,9 +148,9 @@ const styles = StyleSheet.create({
         borderRadius: 15,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#211D16",
+        backgroundColor: "#EFF6FF",
         borderWidth: 1,
-        borderColor: "#3A3020",
+        borderColor: "#DBEAFE",
     },
 
     textContainer: {
@@ -152,7 +160,7 @@ const styles = StyleSheet.create({
     },
 
     welcomeText: {
-        color: "#777777",
+        color: "#64748B",
         fontSize: 11,
         marginBottom: 2,
     },
@@ -165,13 +173,13 @@ const styles = StyleSheet.create({
 
     name: {
         maxWidth: "85%",
-        color: "#FFFFFF",
+        color: "#172554",
         fontSize: 16,
         fontWeight: "700",
     },
 
     role: {
-        color: "#CB9E53",
+        color: "#2563EB",
         fontSize: 10,
         fontWeight: "600",
         marginTop: 2,
@@ -183,9 +191,9 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#151515",
+        backgroundColor: "#FFFFFF",
         borderWidth: 1,
-        borderColor: "#292929",
+        borderColor: "#E2E8F0",
         position: "relative",
     },
 
@@ -199,13 +207,13 @@ const styles = StyleSheet.create({
         borderRadius: 9,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#CB9E53",
+        backgroundColor: "#2563EB",
         borderWidth: 2,
-        borderColor: "#0B0B0B",
+        borderColor: "#F5F7FB",
     },
 
     notificationCount: {
-        color: "#0B0B0B",
+        color: "#FFFFFF",
         fontSize: 8,
         fontWeight: "800",
     },

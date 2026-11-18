@@ -1,134 +1,118 @@
+
 import { apiSlice } from "./apiSlice";
 
-const DOCTORS_URL = "/api/doctor";
-
-
+const DOCTORS_URL = "/api/doctor/doctors";
 
 export interface Doctor {
-    _id?: string;
-    id?: string;
+    id: string;
+    owner_user_id: string;
+    name: string;
+    email: string;
+    phone: string;
+    specialization: string;
+    qualification: string;
+    experience: number;
+    consultation_fee: number;
+    is_active: boolean;
+    created_at?: string;
+    updated_at?: string;
+}
 
-    FirstName?: string;
-    LastName?: string;
-    Email?: string;
-    Phone?: string;
-    Gender?: string;
-    DateOfBirth?: string;
-    Specialization?: string;
-    Qualification?: string;
-    Experience?: number;
-    LicenseNumber?: string;
-    Address?: string;
-    IsActive?: boolean;
-    CreatedAt?: string;
-    UpdatedAt?: string;
-
-    [key: string]: any;
+interface ApiResponse<T> {
+    success: boolean;
+    message?: string;
+    data: T;
 }
 
 export interface CreateDoctorRequest {
-    FirstName: string;
-    LastName: string;
-    Email: string;
-    Phone: string;
-    Gender: string;
-    DateOfBirth: string;
-    Specialization: string;
-    Qualification: string;
-    Experience: number;
-    LicenseNumber: string;
-    Address: string;
-    IsActive?: boolean;
+    name: string;
+    email: string;
+    phone: string;
+    specialization: string;
+    qualification: string;
+    experience: number;
+    consultation_fee: number;
 }
 
 export interface UpdateDoctorRequest {
     id: string;
-
-    FirstName?: string;
-    LastName?: string;
-    Email?: string;
-    Phone?: string;
-    Gender?: string;
-    DateOfBirth?: string;
-    Specialization?: string;
-    Qualification?: string;
-    Experience?: number;
-    LicenseNumber?: string;
-    Address?: string;
-    IsActive?: boolean;
+    owner_user_id?: string;
+    name?: string;
+    phone?: string;
+    specialization?: string;
+    qualification?: string;
+    experience?: number;
+    consultation_fee?: number;
+    is_active?: boolean;
 }
 
+export const doctorApi = apiSlice
+    .enhanceEndpoints({
+        addTagTypes: ["Doctor"],
+    })
+    .injectEndpoints({
+        endpoints: (builder) => ({
+            createDoctor: builder.mutation<Doctor, CreateDoctorRequest>({
+                query: (data) => ({
+                    url: `${DOCTORS_URL}/createdoctor`,
+                    method: "POST",
+                    body: data,
+                }),
+                transformResponse: (response: ApiResponse<Doctor>) =>
+                    response.data,
+                invalidatesTags: ["Doctor"],
+            }),
 
-export const doctorApi = apiSlice.injectEndpoints({
-    endpoints: (builder) => ({
+            getAllDoctors: builder.query<Doctor[], void>({
+                query: () => ({
+                    url: `${DOCTORS_URL}/listdoctors`,
+                    method: "GET",
+                }),
+                transformResponse: (response: ApiResponse<Doctor[]>) =>
+                    response.data,
+                providesTags: ["Doctor"],
+            }),
 
-        // Create doctor
-        createDoctor: builder.mutation<
-            Doctor,
-            CreateDoctorRequest
-        >({
-            query: (data) => ({
-                url: `${DOCTORS_URL}/createdoctor`,
-                method: "POST",
-                body: data,
+            getDoctorById: builder.query<Doctor, string>({
+                query: (id) => ({
+                    url: `${DOCTORS_URL}/viewdoctor/${id}`,
+                    method: "GET",
+                }),
+                transformResponse: (response: ApiResponse<Doctor>) =>
+                    response.data,
+                providesTags: ["Doctor"],
+            }),
+
+            updateDoctor: builder.mutation<Doctor, UpdateDoctorRequest>({
+                query: ({ id, ...data }) => ({
+                    url: `${DOCTORS_URL}/updatedoctor/${id}`,
+                    method: "PUT",
+                    body: data,
+                }),
+                transformResponse: (response: ApiResponse<Doctor>) =>
+                    response.data,
+                invalidatesTags: ["Doctor"],
+            }),
+
+            deleteDoctor: builder.mutation<{ message: string }, string>({
+                query: (id) => ({
+                    url: `${DOCTORS_URL}/deletedoctor/${id}`,
+                    method: "DELETE",
+                }),
+                transformResponse: (
+                    response: ApiResponse<unknown>
+                ) => ({
+                    message: response.message || "Doctor deleted successfully",
+                }),
+                invalidatesTags: ["Doctor"],
             }),
         }),
+    });
 
-        // Get all doctors
-        getAllDoctors: builder.query<Doctor[], void>({
-            query: () => ({
-                url: `${DOCTORS_URL}/listdoctors`,
-                method: "GET",
-            }),
-        }),
-
-        // Get doctor by ID
-        getDoctorById: builder.query<Doctor, string>({
-            query: (id) => ({
-                url: `${DOCTORS_URL}/viewdoctor/${id}`,
-                method: "GET",
-            }),
-        }),
-
-        // Update doctor
-        updateDoctor: builder.mutation<
-            Doctor,
-            UpdateDoctorRequest
-        >({
-            query: ({ id, ...data }) => ({
-                url: `${DOCTORS_URL}/updatedoctor/${id}`,
-                method: "PUT",
-                body: data,
-            }),
-        }),
-
-        // Delete doctor
-        deleteDoctor: builder.mutation<
-            any,
-            string
-        >({
-            query: (id) => ({
-                url: `${DOCTORS_URL}/deletedoctor/${id}`,
-                method: "DELETE",
-            }),
-        }),
-    }),
-});
-
-
-
-const {
+export const {
     useCreateDoctorMutation,
     useGetAllDoctorsQuery,
     useGetDoctorByIdQuery,
     useUpdateDoctorMutation,
     useDeleteDoctorMutation,
 } = doctorApi;
-
-export {
-    useCreateDoctorMutation,
-    useGetAllDoctorsQuery,
-    useGetDoctorByIdQuery,
-    useUpdateDoctorMutation,
-    useDeleteDoctorMutation,
-};

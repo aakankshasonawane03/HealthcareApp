@@ -1,17 +1,24 @@
-
 import { router } from "expo-router";
-import { Eye, EyeOff, Lock, Mail } from "lucide-react-native";
+import {
+    Eye,
+    EyeOff,
+    Lock,
+    Mail,
+} from "lucide-react-native";
 import { useState } from "react";
 import {
     KeyboardAvoidingView,
     Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
     View,
 } from "react-native";
+import { useLoginMutation } from "@/redux/slices/userApislices";
+import { setCredentials } from "@/redux/slices/authSlice";
+import { useDispatch } from "react-redux";
+import AuthScreen from "./AuthScreen";
 
 export default function LoginForm() {
     const [email, setEmail] = useState("");
@@ -19,7 +26,10 @@ export default function LoginForm() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
 
-    const handleLogin = () => {
+    const [login, { isLoading }] = useLoginMutation();
+    const dispatch = useDispatch();
+
+    const handleLogin = async () => {
         setError("");
 
         if (!email.trim()) {
@@ -27,12 +37,51 @@ export default function LoginForm() {
             return;
         }
 
-        if (!password.trim()) {
+        if (!password) {
             setError("Please enter your password.");
             return;
         }
 
-        router.replace("/main/dashboard");
+        try {
+            const response = await login({
+                email: email.trim(),
+                password,
+            }).unwrap();
+
+            if (!response?.success) {
+                setError(response?.message || "Login failed.");
+                return;
+            }
+
+            dispatch(
+                setCredentials({
+                    user: response.user,
+                    accessToken: response.access_token,
+                    refreshToken: response.refresh_token,
+                })
+            );
+
+            const role = String(response?.user?.role || "").toLowerCase();
+
+            const dashboardRoutes: Record<string, string> = {
+                patient: "/main/patient",
+                receptionist: "/main/reception",
+                doctor: "/main/doctor",
+                organization: "/main/organization",
+            };
+
+            router.replace(
+                (dashboardRoutes[role] || "/main/dashboard") as any
+            );
+        } catch (err: any) {
+            console.error("Login failed:", err?.data || err);
+
+            setError(
+                err?.data?.message ||
+                err?.data?.error ||
+                "Login failed. Please check your credentials."
+            );
+        }
     };
 
     return (
@@ -40,111 +89,92 @@ export default function LoginForm() {
             style={styles.container}
             behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-            <ScrollView
-                contentContainerStyle={styles.content}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
+            <AuthScreen
+                title="Welcome Back!"
+                subtitle="Sign in to continue to your healthcare account."
             >
-                <View style={styles.logoContainer}>
-                    <View style={styles.logoCircle}>
-                        <Text style={styles.logoText}>H</Text>
-                    </View>
+                <Text style={styles.label}>Email Address</Text>
 
-                    <Text style={styles.appName}>HealthCare</Text>
-
-                    <Text style={styles.subtitle}>
-                        Your health, our priority
-                    </Text>
+                <View style={styles.inputContainer}>
+                    <Mail size={19} color="#7890A8" />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Enter your email"
+                        placeholderTextColor="#A0AEC0"
+                        value={email}
+                        onChangeText={setEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                    />
                 </View>
 
-                <View style={styles.formContainer}>
-                    <Text style={styles.title}>Welcome Back</Text>
+                <Text style={styles.label}>Password</Text>
 
-                    <Text style={styles.description}>
-                        Sign in to continue to your account
-                    </Text>
-
-                    <Text style={styles.label}>Email</Text>
-
-                    <View style={styles.inputContainer}>
-                        <Mail size={20} color="#64748B" />
-
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Enter your email"
-                            placeholderTextColor="#94A3B8"
-                            value={email}
-                            onChangeText={setEmail}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                        />
-                    </View>
-
-                    <Text style={styles.label}>Password</Text>
-
-                    <View style={styles.inputContainer}>
-                        <Lock size={20} color="#64748B" />
-
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Enter your password"
-                            placeholderTextColor="#94A3B8"
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry={!showPassword}
-                            autoCapitalize="none"
-                        />
-
-                        <Pressable
-                            onPress={() => setShowPassword(!showPassword)}
-                            hitSlop={10}
-                        >
-                            {showPassword ? (
-                                <EyeOff size={20} color="#64748B" />
-                            ) : (
-                                <Eye size={20} color="#64748B" />
-                            )}
-                        </Pressable>
-                    </View>
-
-                    {error ? (
-                        <Text style={styles.errorText}>{error}</Text>
-                    ) : null}
-
+                <View style={styles.inputContainer}>
+                    <Lock size={19} color="#7890A8" />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Enter your password"
+                        placeholderTextColor="#A0AEC0"
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
+                    />
                     <Pressable
-                        style={styles.forgotButton}
-                        onPress={() => router.push("/auth/forgot-password")}
+                        onPress={() => setShowPassword(!showPassword)}
+                        hitSlop={10}
                     >
-                        <Text style={styles.forgotText}>
-                            Forgot Password?
-                        </Text>
+                        {showPassword ? (
+                            <EyeOff size={19} color="#7890A8" />
+                        ) : (
+                            <Eye size={19} color="#7890A8" />
+                        )}
                     </Pressable>
-
-                    <Pressable
-                        style={styles.loginButton}
-                        onPress={handleLogin}
-                    >
-                        <Text style={styles.loginButtonText}>
-                            Sign In
-                        </Text>
-                    </Pressable>
-
-                    <View style={styles.signupRow}>
-                        <Text style={styles.signupText}>
-                            Don't have an account?
-                        </Text>
-
-                        <Pressable
-                            onPress={() => router.push("/auth/signup")}
-                        >
-                            <Text style={styles.signupLink}>
-                                {" "}Sign Up
-                            </Text>
-                        </Pressable>
-                    </View>
                 </View>
-            </ScrollView>
+
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+
+                <Pressable
+                    style={styles.forgot}
+                    onPress={() => router.push("/auth/forgot-password")}
+                >
+                    <Text style={styles.forgotText}>Forgot Password?</Text>
+                </Pressable>
+
+                <Pressable
+                    style={[styles.button, isLoading && styles.disabled]}
+                    onPress={handleLogin}
+                    disabled={isLoading}
+                >
+                    <Text style={styles.buttonText}>
+                        {isLoading ? "Signing In..." : "Sign In"}
+                    </Text>
+                </Pressable>
+
+                <View style={styles.footer}>
+                    <Text style={styles.footerText}>
+                        Don't have an account?
+                    </Text>
+                    <Pressable onPress={() => router.push("/auth/signup")}>
+                        <Text style={styles.link}> Sign Up</Text>
+                    </Pressable>
+                </View>
+
+                <View style={styles.footer}>
+                    <Text style={styles.footerText}>
+                        Are you an organization?
+                    </Text>
+                    <Pressable
+                        onPress={() =>
+                            router.push("/auth/organization-login")
+                        }
+                    >
+                        <Text style={styles.link}> Organization Login</Text>
+                    </Pressable>
+                </View>
+            </AuthScreen>
         </KeyboardAvoidingView>
     );
 }
@@ -152,142 +182,74 @@ export default function LoginForm() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#F8FAFC",
     },
-
-    content: {
-        flexGrow: 1,
-        justifyContent: "center",
-        padding: 24,
-    },
-
-    logoContainer: {
-        alignItems: "center",
-        marginBottom: 35,
-    },
-
-    logoCircle: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        backgroundColor: "#2563EB",
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: 14,
-    },
-
-    logoText: {
-        color: "#FFFFFF",
-        fontSize: 32,
-        fontWeight: "700",
-    },
-
-    appName: {
-        fontSize: 28,
-        fontWeight: "700",
-        color: "#0F172A",
-    },
-
-    subtitle: {
-        marginTop: 5,
-        fontSize: 14,
-        color: "#64748B",
-    },
-
-    formContainer: {
-        backgroundColor: "#FFFFFF",
-        borderRadius: 20,
-        padding: 24,
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-    },
-
-    title: {
-        fontSize: 25,
-        fontWeight: "700",
-        color: "#0F172A",
-        marginBottom: 6,
-    },
-
-    description: {
-        fontSize: 14,
-        color: "#64748B",
-        marginBottom: 25,
-    },
-
     label: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "#334155",
+        color: "#334B68",
+        fontSize: 13,
+        fontWeight: "700",
+        marginTop: 13,
         marginBottom: 8,
-        marginTop: 10,
     },
-
     inputContainer: {
-        height: 52,
+        minHeight: 53,
         borderWidth: 1,
-        borderColor: "#CBD5E1",
+        borderColor: "#DCE5EF",
         borderRadius: 12,
         flexDirection: "row",
         alignItems: "center",
         paddingHorizontal: 14,
-        backgroundColor: "#FFFFFF",
+        backgroundColor: "#F9FBFE",
     },
-
     input: {
         flex: 1,
-        marginLeft: 10,
-        fontSize: 15,
-        color: "#0F172A",
+        marginLeft: 11,
+        fontSize: 14,
+        color: "#17365D",
+        paddingVertical: 12,
     },
-
-    errorText: {
+    forgot: {
+        alignSelf: "flex-end",
+        marginTop: 13,
+    },
+    forgotText: {
+        color: "#1765C1",
+        fontSize: 13,
+        fontWeight: "700",
+    },
+    error: {
         color: "#DC2626",
         fontSize: 13,
         marginTop: 10,
     },
-
-    forgotButton: {
-        alignSelf: "flex-end",
-        marginTop: 12,
-    },
-
-    forgotText: {
-        color: "#2563EB",
-        fontSize: 13,
-        fontWeight: "600",
-    },
-
-    loginButton: {
-        height: 52,
+    button: {
+        height: 53,
         borderRadius: 12,
-        backgroundColor: "#2563EB",
+        backgroundColor: "#1765C1",
         alignItems: "center",
         justifyContent: "center",
-        marginTop: 24,
+        marginTop: 23,
     },
-
-    loginButtonText: {
+    disabled: {
+        opacity: 0.6,
+    },
+    buttonText: {
         color: "#FFFFFF",
         fontSize: 16,
-        fontWeight: "700",
+        fontWeight: "800",
     },
-
-    signupRow: {
+    footer: {
         flexDirection: "row",
         justifyContent: "center",
-        marginTop: 22,
+        flexWrap: "wrap",
+        marginTop: 19,
     },
-
-    signupText: {
-        color: "#64748B",
-        fontSize: 14,
+    footerText: {
+        color: "#718096",
+        fontSize: 13,
     },
-
-    signupLink: {
-        color: "#2563EB",
-        fontSize: 14,
-        fontWeight: "700",
+    link: {
+        color: "#1765C1",
+        fontSize: 13,
+        fontWeight: "800",
     },
 });
-

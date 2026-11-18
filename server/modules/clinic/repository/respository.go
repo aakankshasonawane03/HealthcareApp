@@ -93,8 +93,13 @@ func (r *clinicRepository) Update(
 			"description":  clinic.Description,
 			"opening_time": clinic.OpeningTime,
 			"closing_time": clinic.ClosingTime,
-			"is_active":    clinic.IsActive,
-			"updated_at":   clinic.UpdatedAt,
+
+			// Location coordinates
+			"latitude":  clinic.Latitude,
+			"longitude": clinic.Longitude,
+
+			"is_active":  clinic.IsActive,
+			"updated_at": clinic.UpdatedAt,
 		},
 	}
 

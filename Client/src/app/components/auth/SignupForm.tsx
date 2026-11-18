@@ -1,4 +1,3 @@
-
 import { router } from "expo-router";
 import {
     Eye,
@@ -6,36 +5,40 @@ import {
     Lock,
     Mail,
     User,
+    Stethoscope,
+    ClipboardList,
 } from "lucide-react-native";
 import { useState } from "react";
 import {
     KeyboardAvoidingView,
     Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
     View,
 } from "react-native";
 import { useDispatch } from "react-redux";
-import  { setCredentials } from "../../../redux/slices/authSlice";
+import { setCredentials } from "../../../redux/slices/authSlice";
 import { useRegisterMutation } from "@/redux/slices/userApislices";
+import AuthScreen from "./AuthScreen";
+
+type UserRole = "patient" | "receptionist" | "doctor";
 
 export default function SignupForm() {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-    const dispatch = useDispatch();
-    const [register] = useRegisterMutation();
+    const [role, setRole] = useState<UserRole | "">("");
     const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] =
-        useState(false);
-
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [error, setError] = useState("");
 
-    const handleSignup = () => {
+    const dispatch = useDispatch();
+    const [register, { isLoading }] = useRegisterMutation();
+
+    const handleSignup = async () => {
         setError("");
 
         if (!name.trim()) {
@@ -57,11 +60,90 @@ export default function SignupForm() {
             setError("Passwords do not match.");
             return;
         }
-        const response = register({ name, email, password });
-        console.log("response", response);
-        dispatch(setCredentials(response));
 
-        router.replace("/main/dashboard");
+        if (!role) {
+            setError("Please select your registration role.");
+            return;
+        }
+
+        try {
+            const response = await register({
+                name: name.trim(),
+                email: email.trim(),
+                password,
+                role,
+            }).unwrap();
+
+            console.log("Registration successful:", response);
+
+            dispatch(setCredentials(response));
+
+            const dashboardRoutes: Record<UserRole, string> = {
+                patient: "/main/patient",
+                receptionist: "/main/receptionist",
+                doctor: "/main/doctor",
+            };
+
+            router.replace(dashboardRoutes[role] as any);
+        } catch (err: any) {
+            console.error("Registration failed:", err);
+
+            setError(
+                err?.data?.message ||
+                err?.data?.error ||
+                err?.message ||
+                "Registration failed. Please try again."
+            );
+        }
+    };
+
+    const renderRoleOption = (
+        value: UserRole,
+        title: string,
+        description: string
+    ) => {
+        const selected = role === value;
+
+        const Icon =
+            value === "patient"
+                ? User
+                : value === "receptionist"
+                    ? ClipboardList
+                    : Stethoscope;
+
+        return (
+            <Pressable
+                key={value}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected }}
+                onPress={() => {
+                    setRole(value);
+                    setError("");
+                }}
+                style={[
+                    styles.roleOption,
+                    selected && styles.roleSelected,
+                ]}
+            >
+                <View style={styles.roleIcon}>
+                    <Icon
+                        size={21}
+                        color={selected ? "#1765C1" : "#7890A8"}
+                    />
+                </View>
+
+                <View style={styles.roleText}>
+                    <Text style={styles.roleTitle}>{title}</Text>
+                    <Text style={styles.roleDescription}>
+                        {description}
+                    </Text>
+                </View>
+
+                <View style={styles.radioOuter}>
+                    {selected && <View style={styles.radioInner} />}
+                </View>
+            </Pressable>
+        );
     };
 
     return (
@@ -69,154 +151,140 @@ export default function SignupForm() {
             style={styles.container}
             behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-            <ScrollView
-                contentContainerStyle={styles.content}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
+            <AuthScreen
+                title="Create Your Account"
+                subtitle="Join our healthcare platform and get started."
             >
-                <View style={styles.logoContainer}>
-                    <View style={styles.logoCircle}>
-                        <Text style={styles.logoText}>H</Text>
-                    </View>
-
-                    <Text style={styles.appName}>HealthCare</Text>
-
-                    <Text style={styles.subtitle}>
-                        Create your healthcare account
-                    </Text>
+                <Text style={styles.label}>Full Name</Text>
+                <View style={styles.inputContainer}>
+                    <User size={19} color="#7890A8" />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Enter your full name"
+                        placeholderTextColor="#A0AEC0"
+                        value={name}
+                        onChangeText={setName}
+                        autoCapitalize="words"
+                    />
                 </View>
 
-                <View style={styles.formContainer}>
-                    <Text style={styles.title}>Create Account</Text>
+                <Text style={styles.label}>Email Address</Text>
+                <View style={styles.inputContainer}>
+                    <Mail size={19} color="#7890A8" />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Enter your email"
+                        placeholderTextColor="#A0AEC0"
+                        value={email}
+                        onChangeText={setEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                    />
+                </View>
 
-                    <Text style={styles.description}>
-                        Sign up to get started
-                    </Text>
-
-                    {/* Name */}
-                    <Text style={styles.label}>Full Name</Text>
-
-                    <View style={styles.inputContainer}>
-                        <User size={20} color="#64748B" />
-
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Enter your full name"
-                            placeholderTextColor="#94A3B8"
-                            value={name}
-                            onChangeText={setName}
-                            autoCapitalize="words"
-                        />
-                    </View>
-
-                    {/* Email */}
-                    <Text style={styles.label}>Email</Text>
-
-                    <View style={styles.inputContainer}>
-                        <Mail size={20} color="#64748B" />
-
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Enter your email"
-                            placeholderTextColor="#94A3B8"
-                            value={email}
-                            onChangeText={setEmail}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                        />
-                    </View>
-
-                    {/* Password */}
-                    <Text style={styles.label}>Password</Text>
-
-                    <View style={styles.inputContainer}>
-                        <Lock size={20} color="#64748B" />
-
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Create a password"
-                            placeholderTextColor="#94A3B8"
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry={!showPassword}
-                            autoCapitalize="none"
-                        />
-
-                        <Pressable
-                            onPress={() =>
-                                setShowPassword(!showPassword)
-                            }
-                            hitSlop={10}
-                        >
-                            {showPassword ? (
-                                <EyeOff size={20} color="#64748B" />
-                            ) : (
-                                <Eye size={20} color="#64748B" />
-                            )}
-                        </Pressable>
-                    </View>
-
-                    {/* Confirm Password */}
-                    <Text style={styles.label}>Confirm Password</Text>
-
-                    <View style={styles.inputContainer}>
-                        <Lock size={20} color="#64748B" />
-
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Confirm your password"
-                            placeholderTextColor="#94A3B8"
-                            value={confirmPassword}
-                            onChangeText={setConfirmPassword}
-                            secureTextEntry={!showConfirmPassword}
-                            autoCapitalize="none"
-                        />
-
-                        <Pressable
-                            onPress={() =>
-                                setShowConfirmPassword(
-                                    !showConfirmPassword
-                                )
-                            }
-                            hitSlop={10}
-                        >
-                            {showConfirmPassword ? (
-                                <EyeOff size={20} color="#64748B" />
-                            ) : (
-                                <Eye size={20} color="#64748B" />
-                            )}
-                        </Pressable>
-                    </View>
-
-                    {error ? (
-                        <Text style={styles.errorText}>{error}</Text>
-                    ) : null}
-
+                <Text style={styles.label}>Password</Text>
+                <View style={styles.inputContainer}>
+                    <Lock size={19} color="#7890A8" />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Create a password"
+                        placeholderTextColor="#A0AEC0"
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
+                    />
                     <Pressable
-                        style={styles.signupButton}
-                        onPress={handleSignup}
+                        onPress={() => setShowPassword(!showPassword)}
+                        hitSlop={10}
                     >
-                        <Text style={styles.signupButtonText}>
-                            Create Account
-                        </Text>
+                        {showPassword ? (
+                            <EyeOff size={19} color="#7890A8" />
+                        ) : (
+                            <Eye size={19} color="#7890A8" />
+                        )}
                     </Pressable>
-
-                    <View style={styles.loginRow}>
-                        <Text style={styles.loginText}>
-                            Already have an account?
-                        </Text>
-
-                        <Pressable
-                            onPress={() => router.replace("/auth/login")}
-                        >
-                            <Text style={styles.loginLink}>
-                                {" "}Sign In
-                            </Text>
-                        </Pressable>
-                    </View>
                 </View>
-            </ScrollView>
+
+                <Text style={styles.label}>Confirm Password</Text>
+                <View style={styles.inputContainer}>
+                    <Lock size={19} color="#7890A8" />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Confirm your password"
+                        placeholderTextColor="#A0AEC0"
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                        secureTextEntry={!showConfirmPassword}
+                        autoCapitalize="none"
+                    />
+                    <Pressable
+                        onPress={() =>
+                            setShowConfirmPassword(!showConfirmPassword)
+                        }
+                        hitSlop={10}
+                    >
+                        {showConfirmPassword ? (
+                            <EyeOff size={19} color="#7890A8" />
+                        ) : (
+                            <Eye size={19} color="#7890A8" />
+                        )}
+                    </Pressable>
+                </View>
+
+                <Text style={styles.label}>Select Your Role</Text>
+
+                {renderRoleOption(
+                    "patient",
+                    "Patient",
+                    "Appointments and health records"
+                )}
+                {renderRoleOption(
+                    "receptionist",
+                    "Receptionist",
+                    "Patient registration and appointments"
+                )}
+                {renderRoleOption(
+                    "doctor",
+                    "Doctor",
+                    "Clinical and patient management"
+                )}
+
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+
+                <Pressable
+                    style={[styles.button, isLoading && styles.disabled]}
+                    onPress={handleSignup}
+                    disabled={isLoading}
+                >
+                    <Text style={styles.buttonText}>
+                        {isLoading ? "Creating Account..." : "Create Account"}
+                    </Text>
+                </Pressable>
+
+                <View style={styles.footer}>
+                    <Text style={styles.footerText}>
+                        Already have an account?
+                    </Text>
+                    <Pressable onPress={() => router.replace("/auth/login")}>
+                        <Text style={styles.link}> Sign In</Text>
+                    </Pressable>
+                </View>
+
+                <View style={styles.footer}>
+                    <Text style={styles.footerText}>
+                        Registering an organization?
+                    </Text>
+                    <Pressable
+                        onPress={() =>
+                            router.push("/auth/organization-signup")
+                        }
+                    >
+                        <Text style={styles.link}> Organization Signup</Text>
+                    </Pressable>
+                </View>
+            </AuthScreen>
         </KeyboardAvoidingView>
     );
 }
@@ -224,131 +292,116 @@ export default function SignupForm() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#F8FAFC",
     },
-
-    content: {
-        flexGrow: 1,
-        justifyContent: "center",
-        padding: 24,
-    },
-
-    logoContainer: {
-        alignItems: "center",
-        marginBottom: 30,
-    },
-
-    logoCircle: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: "#2563EB",
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: 12,
-    },
-
-    logoText: {
-        color: "#FFFFFF",
-        fontSize: 30,
-        fontWeight: "700",
-    },
-
-    appName: {
-        fontSize: 27,
-        fontWeight: "700",
-        color: "#0F172A",
-    },
-
-    subtitle: {
-        marginTop: 5,
-        fontSize: 14,
-        color: "#64748B",
-    },
-
-    formContainer: {
-        backgroundColor: "#FFFFFF",
-        borderRadius: 20,
-        padding: 24,
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-    },
-
-    title: {
-        fontSize: 25,
-        fontWeight: "700",
-        color: "#0F172A",
-        marginBottom: 6,
-    },
-
-    description: {
-        fontSize: 14,
-        color: "#64748B",
-        marginBottom: 18,
-    },
-
     label: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "#334155",
-        marginTop: 10,
-        marginBottom: 8,
+        color: "#334B68",
+        fontSize: 13,
+        fontWeight: "700",
+        marginTop: 12,
+        marginBottom: 7,
     },
-
     inputContainer: {
-        height: 52,
+        minHeight: 49,
         borderWidth: 1,
-        borderColor: "#CBD5E1",
-        borderRadius: 12,
+        borderColor: "#DCE5EF",
+        borderRadius: 11,
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 14,
-        backgroundColor: "#FFFFFF",
+        paddingHorizontal: 12,
+        backgroundColor: "#F9FBFE",
     },
-
     input: {
         flex: 1,
         marginLeft: 10,
-        fontSize: 15,
-        color: "#0F172A",
+        fontSize: 14,
+        color: "#17365D",
+        paddingVertical: 10,
     },
-
-    errorText: {
+    roleOption: {
+        flexDirection: "row",
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: "#DCE5EF",
+        borderRadius: 11,
+        padding: 10,
+        marginTop: 8,
+        backgroundColor: "#FFFFFF",
+    },
+    roleSelected: {
+        borderColor: "#1765C1",
+        backgroundColor: "#EFF6FF",
+    },
+    roleIcon: {
+        width: 39,
+        height: 39,
+        borderRadius: 10,
+        backgroundColor: "#EDF4FC",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    roleText: {
+        flex: 1,
+        marginLeft: 11,
+    },
+    roleTitle: {
+        color: "#17365D",
+        fontWeight: "700",
+        fontSize: 13,
+    },
+    roleDescription: {
+        color: "#718096",
+        fontSize: 11,
+        marginTop: 3,
+    },
+    radioOuter: {
+        height: 19,
+        width: 19,
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: "#94A3B8",
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    radioInner: {
+        height: 9,
+        width: 9,
+        borderRadius: 5,
+        backgroundColor: "#1765C1",
+    },
+    error: {
         color: "#DC2626",
         fontSize: 13,
         marginTop: 10,
     },
-
-    signupButton: {
-        height: 52,
-        borderRadius: 12,
-        backgroundColor: "#2563EB",
+    button: {
+        height: 51,
+        borderRadius: 11,
+        backgroundColor: "#1765C1",
         alignItems: "center",
         justifyContent: "center",
-        marginTop: 24,
+        marginTop: 20,
     },
-
-    signupButtonText: {
+    disabled: {
+        opacity: 0.6,
+    },
+    buttonText: {
         color: "#FFFFFF",
-        fontSize: 16,
-        fontWeight: "700",
+        fontSize: 15,
+        fontWeight: "800",
     },
-
-    loginRow: {
+    footer: {
         flexDirection: "row",
         justifyContent: "center",
-        marginTop: 22,
+        flexWrap: "wrap",
+        marginTop: 17,
     },
-
-    loginText: {
-        color: "#64748B",
-        fontSize: 14,
+    footerText: {
+        color: "#718096",
+        fontSize: 12,
     },
-
-    loginLink: {
-        color: "#2563EB",
-        fontSize: 14,
-        fontWeight: "700",
+    link: {
+        color: "#1765C1",
+        fontSize: 12,
+        fontWeight: "800",
     },
 });
-

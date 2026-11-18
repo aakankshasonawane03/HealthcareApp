@@ -62,6 +62,9 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 	protected.GET("/view/:id", m.handler.GetClinicByID)
 	protected.PUT("/update/:id", m.handler.UpdateClinic)
 	protected.DELETE("/delete/:id", m.handler.DeleteClinic)
+
+	// Nearby clinic search
+	protected.GET("/nearby", m.handler.GetNearbyClinics)
 }
 
 var _ module.Module = (*Module)(nil)
