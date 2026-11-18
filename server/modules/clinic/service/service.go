@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"time"
 
@@ -18,8 +19,12 @@ type ClinicService interface {
 	GetClinicByID(ctx context.Context, organizationID, id primitive.ObjectID) (*model.Clinic, error)
 	UpdateClinic(ctx context.Context, organizationID, id primitive.ObjectID, clinic *model.Clinic) error
 	DeleteClinic(ctx context.Context, organizationID, id primitive.ObjectID) error
-}
 
+	FindNearbyClinics(
+		ctx context.Context,
+		longitude, latitude, radiusInMeters float64,
+	) ([]model.Clinic, error)
+}
 
 type clinicService struct {
 	repo repository.ClinicRepository
@@ -36,12 +41,50 @@ func validateOrganizationID(organizationID primitive.ObjectID) error {
 	return nil
 }
 
+// Validate GeoJSON Point location.
+// Coordinates must be [longitude, latitude].
+func validateClinicLocation(location model.Location) error {
+	if location.Type != "Point" {
+		return errors.New("location type must be Point")
+	}
+
+	if len(location.Coordinates) != 2 {
+		return errors.New("location must contain longitude and latitude")
+	}
+
+	longitude := location.Coordinates[0]
+	latitude := location.Coordinates[1]
+
+	if math.IsNaN(longitude) || math.IsInf(longitude, 0) ||
+		math.IsNaN(latitude) || math.IsInf(latitude, 0) {
+		return errors.New("location coordinates must be valid numbers")
+	}
+
+	if longitude < -180 || longitude > 180 {
+		return errors.New("longitude must be between -180 and 180")
+	}
+
+	if latitude < -90 || latitude > 90 {
+		return errors.New("latitude must be between -90 and 90")
+	}
+
+	return nil
+}
+
 func (s *clinicService) CreateClinic(
 	ctx context.Context,
 	organizationID primitive.ObjectID,
 	clinic *model.Clinic,
 ) error {
 	if err := validateOrganizationID(organizationID); err != nil {
+		return err
+	}
+
+	if clinic == nil {
+		return errors.New("clinic data is required")
+	}
+
+	if err := validateClinicLocation(clinic.Location); err != nil {
 		return err
 	}
 
@@ -72,7 +115,7 @@ func (s *clinicService) CreateClinic(
 		return errors.New("clinic phone is required")
 	}
 
-	// Always assign the trusted organization ID from the caller.
+	// Always assign trusted organization ID from caller.
 	clinic.ID = primitive.NewObjectID()
 	clinic.OrganizationID = organizationID
 	clinic.IsActive = true
@@ -98,6 +141,7 @@ func (s *clinicService) GetAllClinics(
 	}
 
 	result := make([]model.Clinic, len(clinics))
+
 	for i, clinic := range clinics {
 		result[i] = model.Clinic{
 			ID:             clinic.ID,
@@ -112,6 +156,7 @@ func (s *clinicService) GetAllClinics(
 			Description:    clinic.Description,
 			OpeningTime:    clinic.OpeningTime,
 			ClosingTime:    clinic.ClosingTime,
+			Location:       clinic.Location,
 			IsActive:       clinic.IsActive,
 			CreatedAt:      clinic.CreatedAt,
 			UpdatedAt:      clinic.UpdatedAt,
@@ -141,6 +186,14 @@ func (s *clinicService) UpdateClinic(
 		return err
 	}
 
+	if clinic == nil {
+		return errors.New("clinic data is required")
+	}
+
+	if err := validateClinicLocation(clinic.Location); err != nil {
+		return err
+	}
+
 	clinic.Name = strings.TrimSpace(clinic.Name)
 	clinic.Address = strings.TrimSpace(clinic.Address)
 	clinic.City = strings.TrimSpace(clinic.City)
@@ -167,9 +220,6 @@ func (s *clinicService) UpdateClinic(
 	if clinic.Phone == "" {
 		return errors.New("clinic phone is required")
 	}
-	if clinic == nil {
-		return errors.New("clinic data is required")
-	}
 
 	// Do not allow request data to change clinic ownership.
 	clinic.OrganizationID = organizationID
@@ -187,4 +237,35 @@ func (s *clinicService) DeleteClinic(
 	}
 
 	return s.repo.Delete(ctx, organizationID, id)
+}
+
+// Find clinics near the supplied coordinates.
+func (s *clinicService) FindNearbyClinics(
+	ctx context.Context,
+	longitude, latitude, radiusInMeters float64,
+) ([]model.Clinic, error) {
+	if math.IsNaN(longitude) || math.IsInf(longitude, 0) ||
+		math.IsNaN(latitude) || math.IsInf(latitude, 0) {
+		return nil, errors.New("coordinates must be valid numbers")
+	}
+
+	if longitude < -180 || longitude > 180 {
+		return nil, errors.New("longitude must be between -180 and 180")
+	}
+
+	if latitude < -90 || latitude > 90 {
+		return nil, errors.New("latitude must be between -90 and 90")
+	}
+
+	if math.IsNaN(radiusInMeters) || math.IsInf(radiusInMeters, 0) ||
+		radiusInMeters <= 0 || radiusInMeters > 100000 {
+		return nil, errors.New("radius must be between 1 and 100000 meters")
+	}
+
+	return s.repo.FindNearby(
+		ctx,
+		longitude,
+		latitude,
+		radiusInMeters,
+	)
 }

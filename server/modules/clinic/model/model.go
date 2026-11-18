@@ -1,3 +1,4 @@
+
 package clinic
 
 import (
@@ -5,6 +6,11 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+type Location struct {
+	Type        string    `bson:"type" json:"type"`
+	Coordinates []float64 `bson:"coordinates" json:"coordinates"`
+}
 
 type Clinic struct {
 	ID             primitive.ObjectID `bson:"_id,omitempty" json:"id"`
@@ -17,6 +23,8 @@ type Clinic struct {
 	Phone          string             `bson:"phone" json:"phone" binding:"required"`
 	Email          string             `bson:"email" json:"email"`
 	Description    string             `bson:"description" json:"description"`
+
+	Location Location `bson:"location" json:"location"`
 
 	OpeningTime string `bson:"opening_time" json:"opening_time"`
 	ClosingTime string `bson:"closing_time" json:"closing_time"`

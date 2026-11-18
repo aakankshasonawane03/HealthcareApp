@@ -11,11 +11,25 @@ import (
 )
 
 type ClinicRepository interface {
-	Create(ctx context.Context, clinic *model.Clinic) error
-	GetAll(ctx context.Context, organizationID primitive.ObjectID) ([]model.Clinic, error)
-	GetByID(ctx context.Context, organizationID, id primitive.ObjectID) (*model.Clinic, error)
-	Update(ctx context.Context, organizationID, id primitive.ObjectID, clinic *model.Clinic) error
-	Delete(ctx context.Context, organizationID, id primitive.ObjectID) error
+    Create(ctx context.Context, clinic *model.Clinic) error
+
+    GetAll(ctx context.Context, organizationID primitive.ObjectID) ([]model.Clinic, error)
+
+    GetByID(ctx context.Context, organizationID, id primitive.ObjectID) (*model.Clinic, error)
+
+    Update(ctx context.Context, organizationID, id primitive.ObjectID, clinic *model.Clinic) error
+
+    Delete(ctx context.Context, organizationID, id primitive.ObjectID) error
+
+    // Geospatial methods
+    CreateLocationIndex(ctx context.Context) error
+
+    FindNearby(
+        ctx context.Context,
+        longitude float64,
+        latitude float64,
+        radiusInMeters float64,
+    ) ([]model.Clinic, error)
 }
 
 type clinicRepository struct {
@@ -143,4 +157,57 @@ func (r *clinicRepository) Delete(
 	}
 
 	return nil
+}
+func (r *clinicRepository) CreateLocationIndex(
+    ctx context.Context,
+) error {
+    indexModel := mongo.IndexModel{
+        Keys: bson.D{
+            {Key: "location", Value: "2dsphere"},
+        },
+    }
+
+    _, err := r.collection.Indexes().CreateOne(ctx, indexModel)
+    return err
+}
+func (r *clinicRepository) FindNearby(
+    ctx context.Context,
+    longitude float64,
+    latitude float64,
+    radiusInMeters float64,
+) ([]model.Clinic, error) {
+
+    filter := bson.M{
+        "location": bson.M{
+            "$nearSphere": bson.M{
+                "$geometry": bson.M{
+                    "type": "Point",
+                    "coordinates": []float64{
+                        longitude,
+                        latitude,
+                    },
+                },
+                "$maxDistance": radiusInMeters,
+            },
+        },
+        "is_active": true,
+    }
+
+    cursor, err := r.collection.Find(ctx, filter)
+    if err != nil {
+        return nil, err
+    }
+    defer cursor.Close(ctx)
+
+    var clinics []model.Clinic
+
+    if err := cursor.All(ctx, &clinics); err != nil {
+        return nil, err
+    }
+
+    if clinics == nil {
+        clinics = []model.Clinic{}
+    }
+
+    return clinics, nil
 }

@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	clinicModel "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/model"
@@ -95,7 +96,6 @@ func (h *ClinicController) CreateClinic(c *gin.Context) {
 		return
 	}
 
-	// Do not trust organization_id from the request body.
 	clinic.OrganizationID = organizationID
 
 	err := h.service.CreateClinic(
@@ -203,7 +203,6 @@ func (h *ClinicController) UpdateClinic(c *gin.Context) {
 		return
 	}
 
-	// Prevent the request from changing the clinic's organization.
 	clinic.OrganizationID = organizationID
 
 	err = h.service.UpdateClinic(
@@ -267,5 +266,58 @@ func (h *ClinicController) DeleteClinic(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Clinic deleted successfully",
+	})
+}
+
+// FindNearbyClinics searches for active clinics near patient coordinates.
+// Query parameters: longitude, latitude, radius (meters).
+func (h *ClinicController) FindNearbyClinics(c *gin.Context) {
+	longitude, err := strconv.ParseFloat(c.Query("longitude"), 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Valid longitude is required",
+		})
+		return
+	}
+
+	latitude, err := strconv.ParseFloat(c.Query("latitude"), 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Valid latitude is required",
+		})
+		return
+	}
+
+	// Default radius: 5 kilometers.
+	radius := 5000.0
+
+	if radiusParam := c.Query("radius"); radiusParam != "" {
+		radius, err = strconv.ParseFloat(radiusParam, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Radius must be a valid number",
+			})
+			return
+		}
+	}
+
+	clinics, err := h.service.FindNearbyClinics(
+		c.Request.Context(),
+		longitude,
+		latitude,
+		radius,
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Nearby clinics retrieved successfully",
+		"count":   len(clinics),
+		"radius":  radius,
+		"data":    clinics,
 	})
 }

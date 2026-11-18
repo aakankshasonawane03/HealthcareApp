@@ -1,6 +1,9 @@
 package clinic
 
 import (
+	"context"
+	"time"
+
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/core/module"
 	"github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/auth/middleware"
 	clinicHandler "github.com/Sharkweb-IT-Park/sharkweb-mvp-base/backend/modules/clinic/handler"
@@ -31,8 +34,21 @@ func (m *Module) Init(ctx *module.ModuleContext) error {
 	clinicCollection := ctx.DB.Collection("clinics")
 	organizationCollection := ctx.DB.Collection("organizations")
 
-	// Clinic repository and service
+	// Clinic repository
 	clinicRepo := clinicRepository.NewClinicRepository(clinicCollection)
+
+	// Create MongoDB 2dsphere geospatial index.
+	indexCtx, cancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	defer cancel()
+
+	if err := clinicRepo.CreateLocationIndex(indexCtx); err != nil {
+		return err
+	}
+
+	// Clinic service
 	clinicSvc := clinicService.NewClinicService(clinicRepo)
 
 	// Organization repository and service
@@ -41,7 +57,7 @@ func (m *Module) Init(ctx *module.ModuleContext) error {
 	)
 	orgSvc := organizationService.NewOrganizationService(orgRepo)
 
-	// Initialize clinic handler with both services
+	// Initialize clinic handler
 	m.handler = clinicHandler.NewClinicController(
 		clinicSvc,
 		orgSvc,
@@ -64,6 +80,9 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 			"module": ModuleName,
 		})
 	})
+	// Public nearby clinic search
+
+	r.GET("/clinics/nearby", m.handler.FindNearbyClinics)
 
 	// Protected clinic routes
 	protected := r.Group("/clinics")
@@ -74,6 +93,7 @@ func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
 	protected.GET("/view/:id", m.handler.GetClinicByID)
 	protected.PUT("/update/:id", m.handler.UpdateClinic)
 	protected.DELETE("/delete/:id", m.handler.DeleteClinic)
+
 }
 
 // Compile-time interface check
